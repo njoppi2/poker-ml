@@ -3,20 +3,25 @@ from card import Deck
 import random
 from blind_structure import BlindStructure
 from functions import reorder_list
-from typing import List, Tuple
+from typing import List, Literal, Tuple
 
 class Game:
     def __init__(self, num_ai_players: int, num_human_players: int, starting_chips: int, increase_blind_every: int):
         self._round = 0
-        self.starting_players: Tuple[Player] = self._add_players(num_ai_players, num_human_players, starting_chips)
+        self.starting_players: Tuple[Player] = self._set_starting_players(num_ai_players, num_human_players, starting_chips)
         self.non_broke_players: Tuple[Player] = self.get_non_broke_players()
-        self.current_dealer_order: Tuple[Player] = self._define_starting_dealer_order()
+        self.current_dealer_order: Tuple[Player] = self._set_starting_dealer_order()
         self.current_dealer: int = self.current_dealer_order[self._round]
         self.current_phase_player_order: Tuple[Player] = ()
         self._blind_structure = BlindStructure()
         self._increase_blind_every = increase_blind_every
+        self.phase_name = None
+        self.player_order = None
+        self.table_cards_to_show_count = None
+        self.current_player = None
 
-    def _add_players(self, num_ai_players: int, num_human_players: int, starting_chips: int) -> Tuple[Player]:
+
+    def _set_starting_players(self, num_ai_players: int, num_human_players: int, starting_chips: int) -> Tuple[Player]:
         players = [Player(i, f"AI {i}", starting_chips) for i in range(num_ai_players)]
         players += [Player(num_ai_players + i, f"Player {num_ai_players + i}", starting_chips, is_human=True) for i in range(num_human_players)]
         return tuple(players)
@@ -25,7 +30,7 @@ class Game:
         final_id = id % len(players)
         return reorder_list(players, lambda player: player.id == final_id)
 
-    def _define_starting_dealer_order(self) -> Tuple[Player]:
+    def _set_starting_dealer_order(self) -> Tuple[Player]:
         randomly_determined_starting_dealer = random.randint(0, len(self.non_broke_players) -1)
         dealer_order = self.order_players_by_id(self.get_non_broke_players(), randomly_determined_starting_dealer)
 
@@ -90,5 +95,64 @@ class Game:
 
         if self._round > 5:
             raise Exception("Game is taking too long. Ending simulation.")
+        
+
+
+    def start_phase(self, phase_name: Literal["preflop", "flop", "turn", "river"]):
+        self.phase_name = phase_name
+        player_order, table_cards_to_show_count = self.set_phase_variables()
+        self.player_order = player_order
+        self.table_cards_to_show_count = table_cards_to_show_count
+        self.current_player = self.player_order[0]
+
+    def set_phase_variables(self):
+        first_player_id = None
+        table_cards_to_show_count = None
+        non_broke_players = self.get_non_broke_players()
+        dealer_id = self.current_dealer.id
+
+        if self.phase_name == "preflop":
+            table_cards_to_show_count = 0
+            straddler_id = None
+
+            # If at least 1 player straddled
+            if straddler_id is not None:
+                # The starting player will be the player after the straddler
+                first_player_id = straddler_id + 1
+
+            else:
+                # The starting player will be the player after the big blind
+                first_player_id = dealer_id + 3
+
+        elif self.phase_name == "flop":
+            table_cards_to_show_count = 3
+            # The default starting player will be the player after the dealer (small blind)
+            first_player_id = dealer_id + 1
+
+        elif self.phase_name == "turn":
+            table_cards_to_show_count = 1
+            # The default starting player will be the player after the dealer (small blind)
+            first_player_id = dealer_id + 1
+
+        elif self.phase_name == "river":
+            table_cards_to_show_count = 1
+            # The default starting player will be the player after the dealer (small blind)
+            first_player_id = dealer_id + 1
+
+        final_id = first_player_id % len(non_broke_players)
+        player_order = self.order_players_by_id(non_broke_players, final_id)
+        table_cards_to_show_count = table_cards_to_show_count
+        return (player_order, table_cards_to_show_count)
+    
+    def next_player(self):
+        current_player_id = self.current_player.id
+
+        for _, i in enumerate(self.player_order):
+            next_player = self.get_non_broke_player_by_id(current_player_id + 1 + i)
+            if next_player.folded or next_player.all_in:
+                continue
+            else:
+                self.current_player = next_player
+                return
 
 

@@ -17,28 +17,23 @@ def simulate_poker_game():
         current_dealer = game.current_dealer
         dealer_id = current_dealer.id
 
-        # if table.num_non_broke_players > 1
-
         # If the dealer is broke, skip them
         if current_dealer.is_broke():
             continue
 
-        # num_non_broke_players = NUM_STARTING_PLAYERS # wrong
-        # current_non_broke_players = [player for player in table["players"] if player.get("chips", 0) < 0]
         small_blind, big_blind = game.get_blinds()
         deck = Deck()
         game.give_players_cards(deck)
 
         for current_phase in ["preflop", "flop", "turn", "river"]:
-            phase = Phase(game, current_phase)
+            game.start_phase(current_phase)
 
             while True:
-                current_player = phase.current_player
+                current_player = game.current_player
 
                 current_player.play()
                 break
                 
-
         game.finish_round()
 
         if game.check_win():
