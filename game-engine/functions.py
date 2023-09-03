@@ -2,7 +2,6 @@ import uuid
 import random
 import requests
 from typing import List, Tuple
-from player import Player
 
 def reorder_list(old_list, condition):
     try:

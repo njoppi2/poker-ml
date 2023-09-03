@@ -1,6 +1,5 @@
 from card import Deck, Card
 from game import Game
-from phase import Phase
 from itertools import cycle
 import random
 
@@ -9,18 +8,10 @@ def show_table_cards(cards):
 
 # Define your game simulation function
 def simulate_poker_game():
-    game = Game(num_ai_players=4, num_human_players=0, starting_chips=1000, increase_blind_every=10)
+    game = Game(num_ai_players=4, num_human_players=0, initial_chips=1000, increase_blind_every=10)
 
     # This will iterate each time a round ends, and the dealer chip is passed clockwise, until there is only one player left
-    while True:
-        # for current_dealer in game.dealer_order:
-        current_dealer = game.current_dealer
-        dealer_id = current_dealer.id
-
-        # If the dealer is broke, skip them
-        if current_dealer.is_broke():
-            continue
-
+    while not game.check_win():
         small_blind, big_blind = game.get_blinds()
         deck = Deck()
         game.give_players_cards(deck)
@@ -29,16 +20,14 @@ def simulate_poker_game():
             game.start_phase(current_phase)
 
             while True:
-                current_player = game.current_player
+                current_player = game.get_current_turn_player()
 
                 current_player.play()
                 break
                 
-        game.finish_round()
+        game.finish_round(False)
 
-        if game.check_win():
-            print("Game over. Winner found!")
-            break
+    print("Game over. Winner found!")
         
                 
 # Run the poker game simulation
