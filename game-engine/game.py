@@ -1,0 +1,94 @@
+from player import Player
+from card import Deck
+import random
+from blind_structure import BlindStructure
+from functions import reorder_list
+from typing import List, Tuple
+
+class Game:
+    def __init__(self, num_ai_players: int, num_human_players: int, starting_chips: int, increase_blind_every: int):
+        self._round = 0
+        self.starting_players: Tuple[Player] = self._add_players(num_ai_players, num_human_players, starting_chips)
+        self.non_broke_players: Tuple[Player] = self.get_non_broke_players()
+        self.current_dealer_order: Tuple[Player] = self._define_starting_dealer_order()
+        self.current_dealer: int = self.current_dealer_order[self._round]
+        self.current_phase_player_order: Tuple[Player] = ()
+        self._blind_structure = BlindStructure()
+        self._increase_blind_every = increase_blind_every
+
+    def _add_players(self, num_ai_players: int, num_human_players: int, starting_chips: int) -> Tuple[Player]:
+        players = [Player(i, f"AI {i}", starting_chips) for i in range(num_ai_players)]
+        players += [Player(num_ai_players + i, f"Player {num_ai_players + i}", starting_chips, is_human=True) for i in range(num_human_players)]
+        return tuple(players)
+
+    def order_players_by_id(self, players: Tuple[Player], id: int):
+        final_id = id % len(players)
+        return reorder_list(players, lambda player: player.id == final_id)
+
+    def _define_starting_dealer_order(self) -> Tuple[Player]:
+        randomly_determined_starting_dealer = random.randint(0, len(self.non_broke_players) -1)
+        dealer_order = self.order_players_by_id(self.get_non_broke_players(), randomly_determined_starting_dealer)
+
+        return tuple(dealer_order)
+
+    def get_blinds(self):
+        return self._blind_structure.get_blinds()
+
+    def give_players_cards(self, deck: Deck):
+        for player in self.starting_players:
+            if player.is_broke():
+                continue
+            player.cards = deck.get_cards(2)
+            print(player)
+
+    def get_non_broke_players(self):
+        return [player for player in self.starting_players if player.is_not_broke()]
+
+    def get_non_broke_player_by_id(self, id):
+        non_broke_players = self.get_non_broke_players()
+        final_id = id % len(non_broke_players)
+
+        # The final result should have all starting players
+        ordered_players = self.order_players_by_id(self.starting_players, final_id)
+
+        for starting_player in ordered_players:
+            if starting_player in non_broke_players:
+                return starting_player
+
+    def set_current_phase_player_order(self, starting_player_id: int):
+        non_broke_players = self.get_non_broke_players()
+        final_id = starting_player_id % len(non_broke_players)
+        self.current_phase_player_order = self.order_players_by_id(non_broke_players, final_id)
+
+    def check_win(self) -> bool:
+        return len(self.get_non_broke_players()) == 1
+    
+    def set_dealer(self, next_dealer: Player):
+        self.current_dealer = next_dealer
+    
+    def finish_round(self):
+        print(f"Round {self._round} is over. The dealer is now {self.current_dealer.name}.")
+        self._round += 1
+
+        if (self._round + 1) % self._increase_blind_every == 0:
+            self._blind_structure.increase_blind()
+
+        # Check if someone broke in this round
+        current_non_broke_players = self.get_non_broke_players()
+        if len(self.non_broke_players) != len(current_non_broke_players):
+            self.non_broke_players = current_non_broke_players
+            
+            next_dealer = self.get_non_broke_player_by_id(self.current_dealer.id + 1)
+            self.set_dealer(next_dealer)
+
+            self.current_dealer_order = self.order_players_by_id(current_non_broke_players, next_dealer.id)
+        # If no one broke this round
+        else:
+            num_non_broke_players = len(self.non_broke_players)
+            next_dealer = self.current_dealer_order[self._round % num_non_broke_players]
+            self.set_dealer(next_dealer)
+
+        if self._round > 5:
+            raise Exception("Game is taking too long. Ending simulation.")
+
+
