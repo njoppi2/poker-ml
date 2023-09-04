@@ -1,4 +1,4 @@
-from player import Player, Players
+from player import Player, PlayerTurnState, Players
 from card import Deck
 from common_types import PlayerGroups, Phases
 import random
@@ -62,17 +62,34 @@ class Round:
         self.players = game.players
         self.small_blind = small_blind
         self.big_blind = big_blind
+        self.total_pot = 0
 
     def start(self):
         deck = Deck()
         self.give_players_cards(deck)
         for current_phase in Phases:
+            print(f"\n{current_phase.value} phase is starting.")
+            print("starting total pot: ", self.total_pot)
             phase = Phase(self, current_phase, self.small_blind, self.big_blind)
-            phase.start()
+            phase_pot = phase.start()
+            self.add_to_pot(phase_pot)
+            print("total pot: ", self.total_pot)
+        self.finish_round()
 
     def give_players_cards(self, deck: Deck):
         self.players.give_players_cards(deck)
 
+    def reset_round_players(self, player: Player):
+        player.set_turn_state(PlayerTurnState.NOT_PLAYING)
+        player.all_in = False
+        player.folded = False
+
+    def add_to_pot(self, amount: int):
+        self.total_pot += amount
+
+    def finish_round(self):
+        [self.reset_round_players(player) for player in self.players.get_players("non_broke")]
+        
 
 class Phase:
     """
@@ -84,6 +101,8 @@ class Phase:
         self.phase_name = phase_name
         self.small_blind = small_blind
         self.big_blind = big_blind
+        self.min_phase_bet_to_continue = 0
+        self.phase_pot = 0
 
     def start(self):
         first_player, table_cards_to_show_count = self.set_phase_variables()
@@ -93,19 +112,36 @@ class Phase:
         if self.phase_name == Phases.PRE_FLOP:
             small_blind_player = self.players.get_closest_group_player("non_broke", self.players.current_dealer.id + 1)
             big_blind_player = self.players.get_closest_group_player("non_broke", self.players.current_dealer.id + 2)
+            small_blind_player.pay_blind(self.small_blind)
+            big_blind_player.pay_blind(self.big_blind)
 
-            small_blind_player.bet(self.small_blind)
-            big_blind_player.bet(self.big_blind)
+            self.add_to_pot(self.small_blind + self.big_blind)
+            self.min_phase_bet_to_continue = self.big_blind
 
+        # Iterate over each phase turn
         while len(self.players.get_players("can_win_round")) > 1:
             current_player = self.get_current_turn_player()
-            turn = Turn(self, current_player)
-            turn.start()
+            min_turn_bet_to_continue = self.min_phase_bet_to_continue - current_player.phase_bet_value
+            assert min_turn_bet_to_continue >= 0
+            if current_player.get_played_current_phase():
+                if min_turn_bet_to_continue == 0:
+                    break
 
-            if self.finish_phase():
-                break
+            turn = Turn(self, current_player, min_turn_bet_to_continue)
+
+
+            player_turn_bet = turn.start()
+            print("player_turn_bet: ", player_turn_bet)
+            self.add_to_pot(player_turn_bet)
+
+            if current_player.turn_state == PlayerTurnState.FOLDED:
+                pass
+            elif self.min_phase_bet_to_continue < current_player.phase_bet_value:
+                self.min_phase_bet_to_continue = current_player.phase_bet_value
 
             self.set_current_turn_player(self.players.get_next("can_bet_in_current_turn", current_player.id))
+        self.finish_phase()
+        return self.phase_pot
 
     def get_current_turn_player(self):
         return self.players.current_turn_player
@@ -152,26 +188,33 @@ class Phase:
         table_cards_to_show_count = table_cards_to_show_count
         return (first_phase_player, table_cards_to_show_count)
 
-    def finish_phase(self):
-        # Implement logic to determine if the phase is complete
-        pass
+    def reset_phase_players(self, player: Player):
+        player.set_played_current_phase(False)
+        player.set_phase_bet_value(0)
 
+    def add_to_pot(self, amount: int):
+        self.phase_pot += amount
+
+    def finish_phase(self):
+        [self.reset_phase_players(player) for player in self.players.get_players("non_broke")]
 
 class Turn:
     """
     In a turn a fixed player takes an action, that can be a bet, a call, a raise, a check, a fold, or an all-in.
     """
-    def __init__(self, phase: Phase, player: Player):
+    def __init__(self, phase: Phase, player: Player, min_value_to_continue: int):
         self.phase = phase
         self.player = player
+        self.min_value_to_continue = min_value_to_continue
 
     def start(self):
-        self.player.play()
+        bet = self.player.play(self.min_value_to_continue)
+        if self.player.turn_state != PlayerTurnState.FOLDED:
+            self.player.played_current_phase
 
-        # Implement logic for handling player actions within the turn
+        self.finish_turn()
 
-        self.finish()
+        return bet
 
-    def finish(self):
-        # Implement logic to finish the turn
-        pass
+    def finish_turn(self):
+        self.player.set_turn_bet_value(0)

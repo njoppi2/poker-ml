@@ -26,14 +26,16 @@ class Player:
             "hand": [],
             "descendingSortHand": [],
         }
-        self.bet_value = 0
+        self.turn_bet_value: int | None = 0
+        self.phase_bet_value: int | None = 0
         self.bet_reconciled = False
         self.folded = False
-        self.all_in = False
+        self.is_all_in = False
         self.can_raise = True
         self.stack_investment = 0
         self.robot = not is_human
         self.turn_state: PlayerTurnState = PlayerTurnState.NOT_PLAYING
+        self.played_current_phase = False
 
     def is_broke(self):
         return self.chips <= 0
@@ -47,43 +49,99 @@ class Player:
     def set_turn_state(self, turn_state: PlayerTurnState):
         self.turn_state = turn_state
     
-    def play(self):
+    def get_bet_from_input(self):
+        while True:
+            try:
+                bet_value = int(input("Enter the amount you want to bet: "))
+                if bet_value <= 0:
+                    print("Please enter a valid positive bet amount.")
+                    continue
+                if bet_value > self.chips:
+                    print(f"You don't have enough chips. You only have {self.chips} chips.")
+                    continue
+                return bet_value
+            except ValueError:
+                print("Invalid input. Please enter a valid integer.")
+
+    def play(self, min_turn_value_to_continue: int):
+        assert self.get_turn_state() == PlayerTurnState.WAITING_FOR_TURN
         self.set_turn_state(PlayerTurnState.PLAYING_TURN)
+        
         while self.get_turn_state() == PlayerTurnState.PLAYING_TURN:
             action = input(f"{self.name}, it's your turn. Enter your action (check, bet, fold, etc.): ").strip().lower()
-            
-            if action == "check":
-                break
-            elif action == "bet":
-                value = None
-                while isinstance(value, int) is False:
-                    value = int(input("Enter the amount you want to bet: "))
-                    self.bet(value)
-                
-            elif action == "fold":
+
+            if action == "c":
+                turn_bet = 0
+                state = PlayerTurnState.WAITING_FOR_TURN
+            elif action == "b":
+                turn_bet = self.get_bet_from_input()
+                if turn_bet == self.chips:
+                    state = PlayerTurnState.ALL_IN 
+            elif action == "f":
+                turn_bet = None
+                state = PlayerTurnState.FOLDED
+                self.set_turn_state(state)
                 self.folded = True
-                self.set_turn_state(PlayerTurnState.FOLDED)
                 break
             else:
-                print("Invalid action. Please enter a valid action (check, bet, fold, etc.).")
+                print("Invalid action")
+                continue
 
-        self.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
+            if turn_bet >= min_turn_value_to_continue or state == PlayerTurnState.ALL_IN:
+                self.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
+                all_in = self.make_bet(turn_bet)
+                if all_in:
+                    self.set_turn_state(PlayerTurnState.ALL_IN)
+                self.set_played_current_phase(True)
+                break
+            else:
+                print(f"You need to bet at least {min_turn_value_to_continue} to continue.")
+        
+        assert self.get_turn_state() != PlayerTurnState.PLAYING_TURN
+        return self.get_turn_bet_value()
 
-    def bet(self, amount: int):
-        if self.chips <= amount:
+    def make_bet(self, amount: int) -> bool:
+        if amount == 0:
+            return False
+        elif self.chips <= amount:
             self.all_in()
+            return True
         else:
-            self.bet_value += amount
+            self.turn_bet_value += amount
+            self.phase_bet_value += amount
             self.chips -= amount
-            
+            return False
+
+    def pay_blind(self, blind_value: int):
+        self.make_bet(blind_value)
+        self.set_turn_bet_value(0)
+
+    def set_turn_bet_value(self, amount: int):
+        self.turn_bet_value = amount
+
+    def get_turn_bet_value(self):
+        return self.turn_bet_value
+
+    def set_phase_bet_value(self, amount: int):
+        self.phase_bet_value = amount
+
+    def get_phase_bet_value(self):
+        return self.phase_bet_value
+
+    def set_played_current_phase(self, played_current_phase: bool):
+        self.played_current_phase = played_current_phase
+
+    def get_played_current_phase(self):
+        return self.played_current_phase
+    
     def all_in(self):
-        self.bet_value += self.chips
+        self.turn_bet_value += self.chips
+        self.phase_bet_value += self.chips
         self.chips = 0
         self.all_in = True
 
     def __str__(self):
         return f"{self.name} has {self.chips} chips, and has the hand: {', '.join(map(str, self.cards))}"
-
 
 
 class Players:
@@ -111,7 +169,7 @@ class Players:
         elif group == "non_broke":
             condition = lambda player: player.is_not_broke()
         elif group == "can_bet_in_current_turn":
-            condition = lambda player: player.is_not_broke() and not player.folded and not player.all_in
+            condition = lambda player: player.is_not_broke() and not player.folded and not player.is_all_in
         elif group == "can_win_round":
             condition = lambda player: player.is_not_broke() and not player.folded
 
