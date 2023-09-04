@@ -22,12 +22,11 @@ class Player:
         self.round_start_chips = chips
         self.round_end_chips = chips
         self.cards: List[Card] = []
-        self.current_round_chips_invested = 0
         self.show_down_hand = {
             "hand": [],
             "descendingSortHand": [],
         }
-        self.bet = 0
+        self.bet_value = 0
         self.bet_reconciled = False
         self.folded = False
         self.all_in = False
@@ -50,9 +49,37 @@ class Player:
     
     def play(self):
         self.set_turn_state(PlayerTurnState.PLAYING_TURN)
-        
+        while self.get_turn_state() == PlayerTurnState.PLAYING_TURN:
+            action = input(f"{self.name}, it's your turn. Enter your action (check, bet, fold, etc.): ").strip().lower()
+            
+            if action == "check":
+                break
+            elif action == "bet":
+                value = None
+                while isinstance(value, int) is False:
+                    value = int(input("Enter the amount you want to bet: "))
+                    self.bet(value)
+                
+            elif action == "fold":
+                self.folded = True
+                self.set_turn_state(PlayerTurnState.FOLDED)
+                break
+            else:
+                print("Invalid action. Please enter a valid action (check, bet, fold, etc.).")
+
         self.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
 
+    def bet(self, amount: int):
+        if self.chips <= amount:
+            self.all_in()
+        else:
+            self.bet_value += amount
+            self.chips -= amount
+            
+    def all_in(self):
+        self.bet_value += self.chips
+        self.chips = 0
+        self.all_in = True
 
     def __str__(self):
         return f"{self.name} has {self.chips} chips, and has the hand: {', '.join(map(str, self.cards))}"
@@ -83,6 +110,10 @@ class Players:
             condition = lambda player: True
         elif group == "non_broke":
             condition = lambda player: player.is_not_broke()
+        elif group == "can_bet_in_current_turn":
+            condition = lambda player: player.is_not_broke() and not player.folded and not player.all_in
+        elif group == "can_win_round":
+            condition = lambda player: player.is_not_broke() and not player.folded
 
         return [player for player in self.initial_players if condition(player)]
 
@@ -108,6 +139,10 @@ class Players:
             raise Exception("No player found")
         
         return player_found
+
+    def get_next(self, group: PlayerGroups, id: int):
+        next_player = self.get_closest_group_player(group, id + 1)
+        return next_player
     
     def get_turn_state(self, player: Player):
         return player.get_turn_state()
