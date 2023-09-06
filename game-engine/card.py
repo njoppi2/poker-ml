@@ -3,10 +3,10 @@ from typing import List
 from enum import Enum
 
 class Suit(Enum):
-    HEART = 'Heart'
-    SPADE = 'Spade'
-    CLUB = 'Club'
-    DIAMOND = 'Diamond'
+    HEARTS = 'Hearts'
+    SPADES = 'Spades'
+    CLUBS = 'Clubs'
+    DIAMONDS = 'Diamonds'
 
     def __str__(self):
         return self.value
@@ -39,18 +39,31 @@ class Card:
     def __str__(self):
         return f"{self.value} of {self.suit}"
     
-    
-class Deck:
+class Cards:
     def __init__(self):
-        self.deck: List[Card] = self.generate_deck_of_cards()
+        self.cards: List[Card] = []
+    
+    def extend_cards(self, cards: List[Card]):
+        self.cards.extend(cards)
+    
+    def __str__(self):
+        table_cards_str = "; ".join(map(str, self.cards))
+        return f"{table_cards_str}"
+    
+    
+class Deck(Cards):
+    def __init__(self):
+        self.deck: Cards = self.generate_deck_of_cards()
+        self.table_cards_shown: Cards = []
         self.shuffle()
 
-    def __str__(self):
-        deck_str = "\n".join(map(str, self.deck))
-        return f"\n{deck_str}"
+    def show_n_table_cards(self, n: int):
+        cards = self.get_cards(n)
+        self.table_cards_shown.extend(cards)
+        return self.table_cards_shown
 
     def generate_deck_of_cards(self):
-        deck: List[Card] = []
+        deck: Cards = []
 
         for suit in Suit:
             for value in Value:
@@ -61,11 +74,12 @@ class Deck:
     def shuffle(self):
         random.shuffle(self.deck)
 
-    def get_cards(self, num_cards: int) -> List[Card]:
-        cards: List[Card] = []
+    def get_cards(self, num_cards: int) -> Cards:
+        cards: Cards = []
 
         for _ in range(num_cards):
             if self.deck:
                 cards.append(self.deck.pop())
 
         return cards
+

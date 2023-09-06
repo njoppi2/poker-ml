@@ -1,7 +1,4 @@
-from card import Deck, Card
 from game import Game
-from itertools import cycle
-import random
 
 def show_table_cards(cards):
     print("Table cards: ", cards)

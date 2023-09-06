@@ -1,5 +1,5 @@
 from typing import List
-from card import Card
+from card import Cards
 from typing import List, Literal, Tuple
 from enum import Enum
 from functions import reorder_list
@@ -21,13 +21,14 @@ class Player:
         self.chips = chips
         self.round_start_chips = chips
         self.round_end_chips = chips
-        self.cards: List[Card] = []
+        self.cards: Cards = []
         self.show_down_hand = {
             "hand": [],
             "descendingSortHand": [],
         }
         self.turn_bet_value: int | None = 0
         self.phase_bet_value: int | None = 0
+        self.round_bet_value: int | None = 0
         self.bet_reconciled = False
         self.folded = False
         self.is_all_in = False
@@ -78,10 +79,10 @@ class Player:
                 if turn_bet == self.chips:
                     state = PlayerTurnState.ALL_IN 
             elif action == "f":
-                turn_bet = None
+                self.set_turn_bet_value(None)
                 state = PlayerTurnState.FOLDED
-                self.set_turn_state(state)
                 self.folded = True
+                self.set_turn_state(state)
                 break
             else:
                 print("Invalid action")
@@ -107,6 +108,7 @@ class Player:
             self.all_in()
             return True
         else:
+            self.round_bet_value += amount
             self.turn_bet_value += amount
             self.phase_bet_value += amount
             self.chips -= amount
@@ -128,6 +130,12 @@ class Player:
     def get_phase_bet_value(self):
         return self.phase_bet_value
 
+    def set_round_bet_value(self, amount: int):
+        self.round_bet_value = amount
+
+    def get_round_bet_value(self):
+        return self.round_bet_value
+
     def set_played_current_phase(self, played_current_phase: bool):
         self.played_current_phase = played_current_phase
 
@@ -139,6 +147,9 @@ class Player:
         self.phase_bet_value += self.chips
         self.chips = 0
         self.all_in = True
+
+    def add_chips(self, amount: int):
+        self.chips += amount
 
     def __str__(self):
         return f"{self.name} has {self.chips} chips, and has the hand: {', '.join(map(str, self.cards))}"
@@ -170,7 +181,7 @@ class Players:
             condition = lambda player: player.is_not_broke()
         elif group == "can_bet_in_current_turn":
             condition = lambda player: player.is_not_broke() and not player.folded and not player.is_all_in
-        elif group == "can_win_round":
+        elif group == "active_in_hand":
             condition = lambda player: player.is_not_broke() and not player.folded
 
         return [player for player in self.initial_players if condition(player)]
@@ -214,5 +225,3 @@ class Players:
 
         # Set all players to WAITING_FOR_TURN
         [self.set_turn_state(player, PlayerTurnState.WAITING_FOR_TURN) for player in players]        
-
-        
