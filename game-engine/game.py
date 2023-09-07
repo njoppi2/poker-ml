@@ -1,6 +1,6 @@
 import json
 from player import Player, PlayerTurnState, Players
-from card import Deck, Cards
+from card import Deck, Card
 from common_types import PlayerGroups, Phases
 import random
 from blind_structure import BlindStructure
@@ -71,12 +71,12 @@ class Round:
         
     async def start(self):
         deck = Deck()
-        table_cards = Cards()
+        table_cards: list[Card] = []
         self.give_players_cards(deck)
         for current_phase in Phases:
             print(f"\n{current_phase.value} phase is starting.")
             first_player, table_cards_to_show_count = self.get_phase_variables(current_phase)
-            table_cards.extend_cards(deck.get_cards(table_cards_to_show_count))
+            table_cards.extend(deck.get_cards(table_cards_to_show_count))
             print(f"Table cards are:", table_cards, "\n")
             phase = Phase(self, current_phase, self.small_blind, self.big_blind, first_player)
             phase_pot = await phase.start()

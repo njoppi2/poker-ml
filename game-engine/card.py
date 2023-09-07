@@ -4,12 +4,6 @@ from enum import Enum
 import json
 
 
-class EnumEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, Enum):
-            return obj.value
-        return super().default(obj)
-
 class Suit(Enum):
     HEARTS = 'Hearts'
     SPADES = 'Spades'
@@ -37,20 +31,6 @@ class Value(Enum):
     def __str__(self):
         return self.value
 
-class CardEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, Card):
-            return {
-                "value": obj.value,
-                "suit": obj.suit
-            }
-        return super().default(obj)
-
-class CardsEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, Cards):
-            return obj.cards
-        return super().default(obj)
 
 class Card:
     def __init__(self, value: Value, suit: Suit):
@@ -59,50 +39,36 @@ class Card:
 
     def __str__(self):
         return f"{self.value} of {self.suit}"
+    
 
-class Cards:
+class Deck():
     def __init__(self):
-        self.cards: List[Card] = []
+        self.cards: list[Card] = self.generate_deck_of_cards()
+        self.table_cards_shown: list[Card] = []
+        self.shuffle()
 
-    def extend_cards(self, cards: List[Card]):
+    def extend_cards(self, cards: list[Card]):
         self.cards.extend(cards)
 
-    def to_json(self):
-        return json.dumps(self, cls=CardsEncoder, indent=4)
-
-    def __str__(self):
-        table_cards_str = "; ".join(map(str, self.cards))
-        return table_cards_str
-
-class Deck(Cards):
-    def __init__(self):
-        self.deck: Cards = self.generate_deck_of_cards()
-        self.table_cards_shown: Cards = []
-        self.shuffle()
 
     def show_n_table_cards(self, n: int):
         cards = self.get_cards(n)
-        self.table_cards_shown.extend(cards)
+        self.table_cards_shown.extend(cards.cards)
         return self.table_cards_shown
 
     def generate_deck_of_cards(self):
-        deck: Cards = []
-
-        for suit in Suit:
-            for value in Value:
-                card = Card(value, suit)
-                deck.append(card)
-        return deck
+        cards: list[Card] = [Card(value, suit) for suit in Suit for value in Value]
+        return cards
 
     def shuffle(self):
-        random.shuffle(self.deck)
+        random.shuffle(self.cards)
 
-    def get_cards(self, num_cards: int) -> Cards:
-        cards: Cards = []
+    def get_cards(self, num_cards: int) -> list[Card]:
+        cards: list[Card] = []
 
         for _ in range(num_cards):
-            if self.deck:
-                cards.append(self.deck.pop())
+            if self.cards:
+                cards.append(self.cards.pop())
 
         return cards
 

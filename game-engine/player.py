@@ -1,13 +1,14 @@
 from typing import List
-from card import Cards
+from card import Card
 from typing import List, Literal, Tuple
 from enum import Enum
 from functions import reorder_list
 from card import Deck
 import random
 import asyncio
-from common_types import PlayerGroups
+from common_types import PlayerGroups, Encoder
 import time
+import json
 
 
 class PlayerTurnState(Enum):
@@ -21,15 +22,18 @@ import json
 
 class PlayerEncoder(json.JSONEncoder):
     def default(self, obj):
+
         if isinstance(obj, Player):
-            # Define a dictionary with the attributes you want to serialize
+            cards_data = [Encoder().default(card) for card in obj.cards]
+            turn_state_data = Encoder().default(obj.turn_state)
+
             return {
                 "id": obj.id,
                 "name": obj.name,
                 "chips": obj.chips,
                 "round_start_chips": obj.round_start_chips,
                 "round_end_chips": obj.round_end_chips,
-                # "cards": obj.cards,
+                "cards": cards_data,
                 "show_down_hand": obj.show_down_hand,
                 "turn_bet_value": obj.turn_bet_value,
                 "phase_bet_value": obj.phase_bet_value,
@@ -40,7 +44,7 @@ class PlayerEncoder(json.JSONEncoder):
                 "can_raise": obj.can_raise,
                 "stack_investment": obj.stack_investment,
                 "is_robot": obj.is_robot,
-                # "turn_state": obj.turn_state,
+                "turn_state": turn_state_data,
                 "played_current_phase": obj.played_current_phase
             }
         return super().default(obj)
@@ -52,7 +56,7 @@ class Player:
         self.chips = chips
         self.round_start_chips = chips
         self.round_end_chips = chips
-        self.cards: Cards = []
+        self.cards: list[Card] = []
         self.show_down_hand = {
             "hand": [],
             "descendingSortHand": [],

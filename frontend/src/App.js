@@ -14,7 +14,7 @@ function App() {
         };
 
         newSocket.onmessage = (event) => {
-            const data = JSON.parse(JSON.parse(event.data));
+            const data = JSON.parse(event.data);
             console.log('Received game update:', data);
             console.log(typeof (data));
             // Update your game UI or state with the received data
@@ -47,7 +47,7 @@ function App() {
                 <p>WebSocket Game</p>
                 {gameData && (
                     <p>
-                        {gameData.name} {gameData.id} {gameData.chips} {gameData.is_robot}
+                        {gameData.name}
                     </p>
                 )}
             </header>
