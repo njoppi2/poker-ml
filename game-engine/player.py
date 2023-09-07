@@ -5,7 +5,10 @@ from enum import Enum
 from functions import reorder_list
 from card import Deck
 import random
+import asyncio
 from common_types import PlayerGroups
+import time
+
 
 class PlayerTurnState(Enum):
     NOT_PLAYING = "NOT_PLAYING"
@@ -13,6 +16,34 @@ class PlayerTurnState(Enum):
     PLAYING_TURN = "PLAYING_TURN"
     FOLDED = "FOLDED"
     ALL_IN = "ALL_IN"
+
+import json
+
+class PlayerEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Player):
+            # Define a dictionary with the attributes you want to serialize
+            return {
+                "id": obj.id,
+                "name": obj.name,
+                "chips": obj.chips,
+                "round_start_chips": obj.round_start_chips,
+                "round_end_chips": obj.round_end_chips,
+                # "cards": obj.cards,
+                "show_down_hand": obj.show_down_hand,
+                "turn_bet_value": obj.turn_bet_value,
+                "phase_bet_value": obj.phase_bet_value,
+                "round_bet_value": obj.round_bet_value,
+                "bet_reconciled": obj.bet_reconciled,
+                "folded": obj.folded,
+                "is_all_in": obj.is_all_in,
+                "can_raise": obj.can_raise,
+                "stack_investment": obj.stack_investment,
+                "is_robot": obj.is_robot,
+                # "turn_state": obj.turn_state,
+                "played_current_phase": obj.played_current_phase
+            }
+        return super().default(obj)
 
 class Player:
     def __init__(self, player_id: int, name: str, chips: int, is_human=False):
@@ -26,15 +57,15 @@ class Player:
             "hand": [],
             "descendingSortHand": [],
         }
-        self.turn_bet_value: int | None = 0
-        self.phase_bet_value: int | None = 0
-        self.round_bet_value: int | None = 0
+        self.turn_bet_value: int = 0
+        self.phase_bet_value: int = 0
+        self.round_bet_value: int = 0
         self.bet_reconciled = False
         self.folded = False
         self.is_all_in = False
         self.can_raise = True
         self.stack_investment = 0
-        self.robot = not is_human
+        self.is_robot = not is_human
         self.turn_state: PlayerTurnState = PlayerTurnState.NOT_PLAYING
         self.played_current_phase = False
 
@@ -64,39 +95,64 @@ class Player:
             except ValueError:
                 print("Invalid input. Please enter a valid integer.")
 
-    def play(self, min_turn_value_to_continue: int):
-        assert self.get_turn_state() == PlayerTurnState.WAITING_FOR_TURN
-        self.set_turn_state(PlayerTurnState.PLAYING_TURN)
-        
-        while self.get_turn_state() == PlayerTurnState.PLAYING_TURN:
-            action = input(f"{self.name}, it's your turn. Enter your action (check, bet, fold, etc.): ").strip().lower()
+    async def ai_play(self, min_turn_value_to_continue: int):
+        assert self.get_turn_state() == PlayerTurnState.PLAYING_TURN
+        time.sleep(2)  # Pause execution for 2 seconds
 
-            if action == "c":
-                turn_bet = 0
-                state = PlayerTurnState.WAITING_FOR_TURN
-            elif action == "b":
-                turn_bet = self.get_bet_from_input()
-                if turn_bet == self.chips:
-                    state = PlayerTurnState.ALL_IN 
-            elif action == "f":
-                self.set_turn_bet_value(None)
+        if self.chips < 100:
+            self.set_turn_state(PlayerTurnState.ALL_IN)
+            self.all_in()
+        else:
+            if min_turn_value_to_continue == 50:
+                self.make_bet(77)
+            elif min_turn_value_to_continue > 200:
+                self.set_turn_bet_value(0)
                 state = PlayerTurnState.FOLDED
                 self.folded = True
                 self.set_turn_state(state)
-                break
             else:
-                print("Invalid action")
-                continue
+                self.make_bet(min_turn_value_to_continue)
+            self.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
+        self.set_played_current_phase(True)
 
-            if turn_bet >= min_turn_value_to_continue or state == PlayerTurnState.ALL_IN:
-                self.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
-                all_in = self.make_bet(turn_bet)
-                if all_in:
-                    self.set_turn_state(PlayerTurnState.ALL_IN)
-                self.set_played_current_phase(True)
-                break
-            else:
-                print(f"You need to bet at least {min_turn_value_to_continue} to continue.")
+    async def play(self, min_turn_value_to_continue: int):
+        assert self.get_turn_state() == PlayerTurnState.WAITING_FOR_TURN
+        self.set_turn_state(PlayerTurnState.PLAYING_TURN)
+        # print(self.name, "is playing hahah")
+
+        if self.is_robot:
+            await self.ai_play(min_turn_value_to_continue)
+        else:
+            while self.get_turn_state() == PlayerTurnState.PLAYING_TURN:
+                action = input(f"{self.name}, it's your turn. Enter your action (check, bet, fold, etc.): ").strip().lower()
+
+                if action == "c":
+                    turn_bet = 0
+                    state = PlayerTurnState.WAITING_FOR_TURN
+                elif action == "b":
+                    turn_bet = self.get_bet_from_input()
+                    if turn_bet == self.chips:
+                        state = PlayerTurnState.ALL_IN 
+                elif action == "f":
+                    self.set_turn_bet_value(0)
+                    state = PlayerTurnState.FOLDED
+                    self.folded = True
+                    self.set_turn_state(state)
+                    break
+                else:
+                    print("Invalid action")
+                    continue
+
+                if turn_bet >= min_turn_value_to_continue or state == PlayerTurnState.ALL_IN:
+                    self.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
+                    all_in = self.make_bet(turn_bet)
+                    if all_in:
+                        self.set_turn_state(PlayerTurnState.ALL_IN)
+                    self.set_played_current_phase(True)
+                    break
+                else:
+                    print(f"You need to bet at least {min_turn_value_to_continue} to continue.")
+        # print(self.name, "is playing end")
         
         assert self.get_turn_state() != PlayerTurnState.PLAYING_TURN
         return self.get_turn_bet_value()
@@ -151,6 +207,10 @@ class Player:
     def add_chips(self, amount: int):
         self.chips += amount
 
+    def to_json(self):
+        return json.dumps(self, cls=PlayerEncoder, indent=4)
+
+
     def __str__(self):
         return f"{self.name} has {self.chips} chips, and has the hand: {', '.join(map(str, self.cards))}"
 
@@ -164,6 +224,7 @@ class Players:
     def _set_initial_players(self, num_ai_players: int, num_human_players: int, initial_chips: int) -> List[Player]:
         players = [Player(i, f"AI {i}", initial_chips) for i in range(num_ai_players)]
         players += [Player(num_ai_players + i, f"Player {num_ai_players + i}", initial_chips, is_human=True) for i in range(num_human_players)]
+        [print(player.id) for player in players]
         return list(players)
     
     def _set_initial_dealer(self) -> List[Player]:

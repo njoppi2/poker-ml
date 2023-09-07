@@ -1,6 +1,14 @@
 import random
 from typing import List
 from enum import Enum
+import json
+
+
+class EnumEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Enum):
+            return obj.value
+        return super().default(obj)
 
 class Suit(Enum):
     HEARTS = 'Hearts'
@@ -10,7 +18,6 @@ class Suit(Enum):
 
     def __str__(self):
         return self.value
-
 
 class Value(Enum):
     TWO = '2'
@@ -30,6 +37,20 @@ class Value(Enum):
     def __str__(self):
         return self.value
 
+class CardEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Card):
+            return {
+                "value": obj.value,
+                "suit": obj.suit
+            }
+        return super().default(obj)
+
+class CardsEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Cards):
+            return obj.cards
+        return super().default(obj)
 
 class Card:
     def __init__(self, value: Value, suit: Suit):
@@ -38,19 +59,21 @@ class Card:
 
     def __str__(self):
         return f"{self.value} of {self.suit}"
-    
+
 class Cards:
     def __init__(self):
         self.cards: List[Card] = []
-    
+
     def extend_cards(self, cards: List[Card]):
         self.cards.extend(cards)
-    
+
+    def to_json(self):
+        return json.dumps(self, cls=CardsEncoder, indent=4)
+
     def __str__(self):
         table_cards_str = "; ".join(map(str, self.cards))
-        return f"{table_cards_str}"
-    
-    
+        return table_cards_str
+
 class Deck(Cards):
     def __init__(self):
         self.deck: Cards = self.generate_deck_of_cards()

@@ -1,3 +1,4 @@
+import json
 from player import Player, PlayerTurnState, Players
 from card import Deck, Cards
 from common_types import PlayerGroups, Phases
@@ -7,7 +8,8 @@ from functions import reorder_list
 from typing import List, Literal, Tuple
 
 class Game:
-    def __init__(self, num_ai_players: int, num_human_players: int, initial_chips: int, increase_blind_every: int):
+    def __init__(self, websocket, num_ai_players: int, num_human_players: int, initial_chips: int, increase_blind_every: int):
+        self.websocket = websocket
         self.players = Players(num_ai_players, num_human_players, initial_chips)
         self._blind_structure = BlindStructure()
         self._increase_blind_every = increase_blind_every
@@ -16,14 +18,14 @@ class Game:
         self.round_num = 0
         # delete non_broke_players variable, create a function instead
 
-    def start_game(self):
+    async def start_game(self):
         while not self.check_win():
             print("-----------------------------")
             print(f"\nRound {self.round_num} is starting. The dealer is {self.get_current_dealer().name}.\n")
 
             small_blind, big_blind = self.get_blinds()
             round = Round(self, small_blind, big_blind)
-            round.start()
+            await round.start()
             self.finish_round(someone_broke=False)
 
         print("Game over. Winner found!")
@@ -66,8 +68,8 @@ class Round:
         self.total_pot = 0
         self.players_in_the_hand = []
         self.is_showdown = False
-
-    def start(self):
+        
+    async def start(self):
         deck = Deck()
         table_cards = Cards()
         self.give_players_cards(deck)
@@ -77,7 +79,7 @@ class Round:
             table_cards.extend_cards(deck.get_cards(table_cards_to_show_count))
             print(f"Table cards are:", table_cards, "\n")
             phase = Phase(self, current_phase, self.small_blind, self.big_blind, first_player)
-            phase_pot = phase.start()
+            phase_pot = await phase.start()
             self.add_to_pot(phase_pot)
             print("total pot: ", self.total_pot)
 
@@ -164,7 +166,7 @@ class Phase:
         self.phase_pot = 0
         self.players.initiate_players_for_phase(first_player)
 
-    def start(self):
+    async def start(self):
 
         if self.phase_name == Phases.PRE_FLOP:
             small_blind_player = self.players.get_closest_group_player("non_broke", self.players.current_dealer.id + 1)
@@ -185,8 +187,7 @@ class Phase:
                 break
             elif current_player.turn_state != PlayerTurnState.FOLDED and current_player.turn_state != PlayerTurnState.ALL_IN:
                 turn = Turn(self, current_player, min_turn_bet_to_continue)
-
-            player_turn_bet = turn.start()
+            player_turn_bet = await turn.start()
 
             if current_player.turn_state == PlayerTurnState.FOLDED:
                 pass
@@ -194,7 +195,7 @@ class Phase:
                 self.add_to_pot(player_turn_bet)
                 if self.min_phase_bet_to_continue < current_player.phase_bet_value:
                     self.min_phase_bet_to_continue = current_player.phase_bet_value
-
+            print("current player: ", current_player.name)
             self.set_current_turn_player(self.players.get_next("can_bet_in_current_turn", current_player.id))
         self.finish_phase()
         return self.phase_pot
@@ -224,14 +225,23 @@ class Turn:
         self.player = player
         self.min_value_to_continue = min_value_to_continue
 
-    def start(self):
-        bet = self.player.play(self.min_value_to_continue)
+    async def start(self):
         if self.player.turn_state != PlayerTurnState.FOLDED:
-            self.player.played_current_phase
+            bet = await self.player.play(self.min_value_to_continue)
 
-        self.finish_turn()
+            if self.player.turn_state != PlayerTurnState.FOLDED:
+                self.player.set_played_current_phase(True)
 
+        await self.finish_turn()
         return bet
+    
+    async def send_turn(self):
+        websocket = self.phase.round.game.websocket
+        if websocket:
+            json_message = json.dumps(self.player.to_json())
+            await websocket.send(json_message)
 
-    def finish_turn(self):
+
+    async def finish_turn(self):
+        await self.send_turn()
         self.player.set_turn_bet_value(0)
