@@ -3,7 +3,7 @@ from typing import List, Literal, Tuple
 from card import Card
 import json
 
-PlayerGroups = Literal["all", "non_broke", "can_bet_in_current_turn", "active_in_hand"]
+PlayerGroups = Literal["all", "non_broke", "can_bet_in_current_turn", "active_in_hand", "all_in"]
 
 class Phases(Enum):
     PRE_FLOP = "PRE_FLOP"

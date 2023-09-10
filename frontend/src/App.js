@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import Game from './components/Game';
 
 function App() {
     const [gameData, setGameData] = useState({});
@@ -16,7 +17,6 @@ function App() {
         newSocket.onmessage = (event) => {
             const data = JSON.parse(event.data);
             console.log('Received game update:', data);
-            console.log(typeof (data));
             // Update your game UI or state with the received data
             setGameData(data);
         };
@@ -37,20 +37,11 @@ function App() {
     }, []); // Empty dependency array to run the effect only once when the component mounts
 
     useEffect(() => {
-        console.log('gameData:', gameData);
     }, [gameData]); // Add gameData as a dependency
 
     return (
         <div className="App">
-            <header className="App-header">
-                {/* Your game UI components can go here */}
-                <p>WebSocket Game</p>
-                {gameData && (
-                    <p>
-                        {gameData.name}
-                    </p>
-                )}
-            </header>
+            <Game gameData={gameData} />
         </div>
     );
 }
