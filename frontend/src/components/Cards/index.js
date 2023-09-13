@@ -3,15 +3,31 @@ import './styles.css';
 
 const Cards = ({ cards = [], height = 60 }) => {
     const suit_symbol = {
-        "Hearts": "♥",
-        "Diamonds": "♦",
-        "Clubs": "♣",
-        "Spades": "♠"
+        "h": "♥",
+        "d": "♦",
+        "c": "♣",
+        "s": "♠"
     }
 
-    const getStyle = (suit) => {
+    const getSuit = (card) => {
+        return card[card.length - 1]
+    }
+
+    const getValue = (card) => {
+        return card.slice(0, card.length - 1)
+    }
+
+    const formatValue = (value) => {
+        if (value === "T") {
+            return "10"
+        }
+        return value
+    }
+
+    const getStyle = (card) => {
+        const suit = getSuit(card)
         const defaultStyle = { width: `${height * 0.71}px`, height: `${height}px`, fontSize: `${height * 0.35}px` }
-        if (suit === "Hearts" || suit === "Diamonds") {
+        if (suit === "h" || suit === "d") {
             return { ...defaultStyle, color: "red" }
         } else {
             return { ...defaultStyle, color: "black" }
@@ -25,10 +41,10 @@ const Cards = ({ cards = [], height = 60 }) => {
                     <div
                         className='card'
                         key={index}
-                        style={{ ...getStyle(card.suit) }}
+                        style={{ ...getStyle(card) }}
 
                     >
-                        {card.value} {suit_symbol[card.suit]}
+                        {formatValue(getValue(card))} {suit_symbol[getSuit(card)]}
                     </div>
                 ))
             }
