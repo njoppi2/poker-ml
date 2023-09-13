@@ -2,7 +2,7 @@ from typing import List
 from typing import List, Literal, Tuple
 from enum import Enum
 from functions import reorder_list
-from card import Deck, Card
+from treys import Card, Deck
 import random
 import asyncio
 from common_types import PlayerGroups, Encoder
@@ -35,7 +35,7 @@ class PlayerEncoder(json.JSONEncoder):
             }
 
         if isinstance(obj, Player):
-            cards_data = [Encoder().default(card) for card in obj.cards]
+            cards_data = [Card.int_to_str(card) for card in obj.cards]
             turn_state_data = Encoder().default(obj.turn_state)
 
             return {
@@ -116,16 +116,16 @@ class Player:
         time.sleep(1)  # Pause execution for 2 seconds
         print("min_turn_value_to_continue: ", min_turn_value_to_continue)
         if self.chips < 100:
-            await self.make_bet(self.chips)
+            await self.make_bet_up_to(100)
         else:
             if min_turn_value_to_continue == 50:
-                await self.make_bet(77)
+                await self.make_bet_up_to(77)
             elif min_turn_value_to_continue == 200:
                 state = PlayerTurnState.FOLDED
                 self.folded = True
                 self.set_turn_state(state)
             else:
-                await self.make_bet(min_turn_value_to_continue)
+                await self.make_bet_up_to(min_turn_value_to_continue)
             if self.get_turn_state() == PlayerTurnState.PLAYING_TURN:
                 self.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
         self.set_played_current_phase(True)
@@ -159,6 +159,12 @@ class Player:
         self.set_played_current_phase(True)
         assert self.get_turn_state() != PlayerTurnState.PLAYING_TURN
         return self.get_turn_bet_value()
+    
+    async def make_bet_up_to(self, amount: int) -> bool:
+        if self.chips >= amount:
+            return await self.make_bet(amount)
+        else:
+            return await self.make_bet(self.chips)
 
     async def make_bet(self, amount: int) -> bool:
 
@@ -258,13 +264,6 @@ class Players:
     def order_players_by_id(self, players: List[Player], raw_id: int):
         id = raw_id % len(self.get_players("all"))
         return reorder_list(players, lambda player: player.id == id)
-        
-    def give_players_cards(self, deck: Deck):
-        for player in self.initial_players:
-            if player.is_broke():
-                continue
-            player.cards = deck.get_cards(2)
-            print(player)
 
     def get_closest_group_player(self, group: PlayerGroups, raw_id: int):
         id = raw_id % len(self.get_players("all"))

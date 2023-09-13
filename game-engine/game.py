@@ -1,7 +1,7 @@
 import json
 import time
 from player import Player, PlayerTurnState, Players, PlayerEncoder
-from card import Deck, Card
+from treys import Card, Deck
 from common_types import PlayerGroups, Phases, Encoder
 import random
 from blind_structure import BlindStructure
@@ -13,7 +13,7 @@ class GameEncoder(json.JSONEncoder):
         if isinstance(obj, Game):
             players_data = PlayerEncoder().default(obj.players)
             phase_name_data = Encoder().default(obj.phase_name)
-            cards_data = [Encoder().default(card) for card in obj.table_cards]
+            cards_data = [Card.int_to_str(card) for card in obj.table_cards]
 
             return {
                 "players": players_data,
@@ -105,7 +105,7 @@ class Round:
         for current_phase in Phases:
             print(f"\n{current_phase.value} phase is starting.")
             first_player, table_cards_to_show_count = self.get_phase_variables(current_phase)
-            self.game.table_cards.extend(deck.get_cards(table_cards_to_show_count))
+            self.game.table_cards.extend(deck.draw(table_cards_to_show_count))
             print(f"Table cards are:", self.game.table_cards, "\n")
             phase = Phase(self, current_phase, self.small_blind, self.big_blind, first_player)
             phase_pot = await phase.start()
@@ -145,7 +145,11 @@ class Round:
         return first_phase_player, table_cards_to_show_count
 
     def give_players_cards(self, deck: Deck):
-        self.players.give_players_cards(deck)
+        for player in self.players.initial_players:
+            if player.is_broke():
+                continue
+            player.cards = deck.draw(2)
+            print(player)
 
     def reset_round_player(self, player: Player):
         player.all_in = False
