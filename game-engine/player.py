@@ -7,7 +7,9 @@ import random
 import asyncio
 from common_types import PlayerGroups, Encoder
 import time
+import websockets
 import json
+import re
 
 
 class PlayerTurnState(Enum):
@@ -98,6 +100,7 @@ class Player:
 
     def is_broke(self):
         assert self.chips >= 0
+        return self.chips == 0 and self.turn_state != PlayerTurnState.ALL_IN
 
     def is_not_broke(self):
         return not self.is_broke()
@@ -108,6 +111,16 @@ class Player:
     def set_turn_state(self, turn_state: PlayerTurnState):
         self.turn_state = turn_state
     
+    def is_valid_bet_format(self, input_string):
+        # Define a regular expression pattern to match "Bet {integer}"
+        pattern = r'^Bet \d+$'
+
+        # Use re.match to check if the input_string matches the pattern
+        if re.match(pattern, input_string):
+            return ["Bet", int(input_string.split()[1])]
+        else:
+            return False
+            
     def get_bet_from_input(self):
         while True:
             try:
@@ -134,7 +147,12 @@ class Player:
                 state = PlayerTurnState.FOLDED
                 self.set_turn_state(state)
             else:
-                await self.make_bet_up_to(min_turn_value_to_continue)
+                # random number from 0 to 1
+                random_number = random.random()
+                if random_number < 0.8:
+                    await self.make_bet_up_to(min_turn_value_to_continue)
+                else:
+                    await self.make_bet_up_to(min_turn_value_to_continue + 40)
             if self.get_turn_state() == PlayerTurnState.PLAYING_TURN:
                 self.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
         self.set_played_current_phase(True)
@@ -144,25 +162,30 @@ class Player:
             await self.ai_play(min_turn_value_to_continue)
         else:
             while self.get_turn_state() == PlayerTurnState.PLAYING_TURN:
-                action = input(f"{self.name}, it's your turn. Enter your action (check, bet, fold, etc.): ").strip().lower()
+                try:
+                    action = await self.game.websocket.recv()
 
-                if action == "c" or action == "b":
-                    if action == "c":
-                        turn_bet = 0
+                    # action = input(f"{self.name}, it's your turn. Enter your action (check, bet, fold, etc.): ").strip().lower()
+
+                    if action == "Check" or self.is_valid_bet_format(action):
+                        if action == "Check":
+                            turn_bet = 0
+                        else:
+                            turn_bet = self.is_valid_bet_format(action)[1]
+                        if turn_bet >= min_turn_value_to_continue:
+                            if await self.make_bet(turn_bet):
+                                if self.get_turn_state() == PlayerTurnState.PLAYING_TURN:
+                                    self.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
+                                    break
+                        else:
+                            print(f"You must bet at least the minimum bet to continue, which is {min_turn_value_to_continue}.")
+                    elif action == "Fold":
+                        self.set_turn_state(PlayerTurnState.FOLDED)
+                        break
                     else:
-                        turn_bet = self.get_bet_from_input()
-                    if turn_bet >= min_turn_value_to_continue:
-                        if await self.make_bet(turn_bet):
-                            if self.get_turn_state() == PlayerTurnState.PLAYING_TURN:
-                                self.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
-                                break
-                    else:
-                        print(f"You must bet at least the minimum bet to continue, which is {min_turn_value_to_continue}.")
-                elif action == "f":
-                    self.set_turn_state(PlayerTurnState.FOLDED)
+                        print("Invalid action")
+                except websockets.exceptions.ConnectionClosedOK:
                     break
-                else:
-                    print("Invalid action")
         
         self.set_played_current_phase(True)
         assert self.get_turn_state() != PlayerTurnState.PLAYING_TURN

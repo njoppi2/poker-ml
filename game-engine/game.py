@@ -16,6 +16,11 @@ class GameEncoder(json.JSONEncoder):
             phase_name_data = Encoder().default(obj.phase_name)
             cards_data = [Card.int_to_str(card) for card in obj.table_cards]
 
+            try: 
+                min_turn_bet_to_continue = obj.min_turn_bet_to_continue
+            except AttributeError:
+                min_turn_bet_to_continue = 0
+
             return {
                 "players": players_data,
                 # "_blind_structure": obj._blind_structure,
@@ -25,6 +30,7 @@ class GameEncoder(json.JSONEncoder):
                 "round_num": obj.round_num,
                 "phase_name": phase_name_data,
                 "total_pot": obj.total_pot,
+                "min_turn_bet_to_continue": min_turn_bet_to_continue,
             }
         return super().default(obj)
 
@@ -40,6 +46,7 @@ class Game:
         self.total_pot = 0
         self.phase_pot = 0
         self.phase_name: Phases = None
+        self.min_turn_bet_to_continue: int = 0
 
     async def start_game(self):
         while not self.check_win():
@@ -147,6 +154,7 @@ class Round:
 
     def give_players_cards(self, deck: Deck):
         for player in self.players.initial_players:
+            assert player.turn_state != PlayerTurnState.ALL_IN
             if player.is_broke():
                 continue
             player.cards = deck.draw(2)
@@ -159,7 +167,7 @@ class Round:
 
     def reset_round_player(self, player: Player):
         player.reset_round_player()
-        if player.is_broke():
+        if player.chips == 0:
             player.set_turn_state(PlayerTurnState.NOT_PLAYING)
         else:
             player.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
@@ -279,21 +287,23 @@ class Phase:
             assert self.get_min_phase_bet_to_continue() >= 0
             # Check if every player has either folded or bet the minimum to continue
             if current_player:
+                print("current player: ", current_player.name)
                 players_waiting_for_turn = self.players.get_players("can_bet_in_current_turn")
                 if current_player.get_played_current_phase() and self.get_min_phase_bet_to_continue() == current_player.phase_bet_value:
                     break
-                elif current_player in players_waiting_for_turn and len(players_waiting_for_turn) > 1:
+                elif current_player in players_waiting_for_turn and len(players_waiting_for_turn) > 0:
                     turn = Turn(self, current_player, self.get_min_phase_bet_to_continue())
                     player_turn_bet = await turn.start()
 
-                if current_player.turn_state == PlayerTurnState.FOLDED:
-                    pass
-                print("current player: ", current_player.name)
-                self.set_current_turn_player(self.players.get_next("can_bet_in_current_turn", current_player.id))
-                await self.round.game.send_game_state()
-            else:
-                time.sleep(1)
-                break
+                players_that_can_bet = self.players.get_players("can_bet_in_current_turn")
+                if len(players_that_can_bet) != 0:
+                    self.set_current_turn_player(self.players.get_next("can_bet_in_current_turn", current_player.id))
+                    await self.round.game.send_game_state()
+                else:
+                    break
+
+        await self.round.game.send_game_state()
+        time.sleep(1)
         self.finish_phase()
         return self.round.game.phase_pot
     
@@ -323,14 +333,14 @@ class Turn:
         self.player = player
         self.min_phase_value_to_continue = min_phase_value_to_continue
         self.current_player_phase_bet = player.phase_bet_value
-        self.min_turn_bet_to_continue = self.min_phase_value_to_continue - self.current_player_phase_bet
+        self.phase.round.game.min_turn_bet_to_continue = self.min_phase_value_to_continue - self.current_player_phase_bet
 
     async def start(self):
         assert self.player.get_turn_state() == PlayerTurnState.WAITING_FOR_TURN
         self.player.set_turn_state(PlayerTurnState.PLAYING_TURN)
         await self.phase.round.game.send_game_state()
 
-        bet = await self.player.play(self.min_turn_bet_to_continue)
+        bet = await self.player.play(self.phase.round.game.min_turn_bet_to_continue)
 
         await self.finish_turn()
         return bet
@@ -340,3 +350,4 @@ class Turn:
     
     async def finish_turn(self):
         self.player.set_turn_bet_value(0)
+        self.phase.round.game.min_turn_bet_to_continue = 0
