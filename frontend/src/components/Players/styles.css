@@ -16,3 +16,11 @@
 .money {
     color: #64ae79;
 }
+
+.cards {
+    position: absolute;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    top: 45px
+}

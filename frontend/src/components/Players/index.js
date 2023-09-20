@@ -1,5 +1,6 @@
 import React from 'react';
 import './styles.css';
+import Cards from '../Cards';
 
 const Player = ({ players }) => {
     const initial_players = players?.initial_players || [];
@@ -50,6 +51,9 @@ const Player = ({ players }) => {
                         <div>{playerStateMessage[player.turn_state]}</div>
                         <div>Bet: {player.phase_bet_value}</div>
                         {/* Add other player-related information */}
+                        <div className='cards' style={player.is_robot ? {} : { display: 'None' }}>
+                            <Cards cards={player.cards} />
+                        </div>
                     </div>
                 ))
             }
