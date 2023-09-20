@@ -1,12 +1,13 @@
 import json
 import time
 from player import Player, PlayerTurnState, Players, PlayerEncoder
-from treys import Card, Deck
+from treys import Card, Deck, Evaluator
 from common_types import PlayerGroups, Phases, Encoder
 import random
 from blind_structure import BlindStructure
 from functions import reorder_list
 from typing import List, Literal, Tuple
+from collections import defaultdict
 
 class GameEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -94,18 +95,18 @@ class Round:
         self.players = game.players
         self.small_blind = small_blind
         self.big_blind = big_blind
-        self.players_in_the_hand = []
+        self.players_in_the_hand: list[Player] = []
         self.is_showdown = False
         self.players.initiate_players_for_round()
+        self.deck = Deck()
 
         
     async def start(self):
-        deck = Deck()
-        self.give_players_cards(deck)
+        self.give_players_cards(self.deck)
         for current_phase in Phases:
             print(f"\n{current_phase.value} phase is starting.")
             first_player, table_cards_to_show_count = self.get_phase_variables(current_phase)
-            self.game.table_cards.extend(deck.draw(table_cards_to_show_count))
+            self.game.table_cards.extend(self.deck.draw(table_cards_to_show_count))
             print(f"Table cards are:", self.game.table_cards, "\n")
             phase = Phase(self, current_phase, self.small_blind, self.big_blind, first_player)
             phase_pot = await phase.start()
@@ -149,28 +150,84 @@ class Round:
             if player.is_broke():
                 continue
             player.cards = deck.draw(2)
+            # if player.id < 2:
+            #     player.cards = [ Card.new('2s'), Card.new('3s'), ]
+            # else:
+            #     player.cards = [ Card.new('Ah'), Card.new('Kd'), ]
+
             print(player)
 
     def reset_round_player(self, player: Player):
-        player.all_in = False
-        player.folded = False
-        player.set_round_bet_value(0)
-
-
-
-    def rank_hands(self):
-        pass
-
-    def distribute_pot(self):
-        if self.is_showdown:
-            self.players_in_the_hand[0].add_chips(self.game.total_pot)
+        player.reset_round_player()
+        if player.is_broke():
+            player.set_turn_state(PlayerTurnState.NOT_PLAYING)
         else:
-            self.players_in_the_hand[0].add_chips(self.game.total_pot)
+            player.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
 
-        self.game.total_pot = 0
+    def take_from_player_round_bet(self, player: Player, amount: int) -> int:
+        if player.round_bet_value < amount:
+            amount = player.round_bet_aux
+        player.round_bet_aux -= amount
+        self.game.total_pot -= amount
+        return amount
+
+    def distribute_pot(self, order_of_best_hands: list[list[Player]]):
+        for equivalent_hand_group in order_of_best_hands:
+            # Break if all players have received their chips
+            if all([player.round_bet_aux == 0 for player in self.players.get_players("non_broke")]):
+                break
+
+            sorted_hand_group = sorted(equivalent_hand_group, key=lambda player: player.round_bet_aux)
+            group_players_count = len(equivalent_hand_group)
+
+            for hand_group_player in sorted_hand_group:
+                hand_group_player_pot = hand_group_player.round_bet_aux
+                remaining_players_to_receive = [player for player in sorted_hand_group if player.round_bet_aux >= hand_group_player_pot]
+                
+                if len(remaining_players_to_receive) == 0:
+                    print("No remaining players to receive")
+                    continue
+
+                chips_for_remaining_players = 0
+
+                for non_broke_player in self.players.get_players("non_broke"):
+                    if non_broke_player.round_bet_aux == 0:
+                        continue
+                    amount_taken = self.take_from_player_round_bet(non_broke_player, hand_group_player_pot)
+                    chips_for_remaining_players += amount_taken
+
+                remaining_players_to_receive_count = len(remaining_players_to_receive)
+                chips_remaining = chips_for_remaining_players % remaining_players_to_receive_count
+                # Choose a random group player to give the remaining chips
+                random_player = random.choice(remaining_players_to_receive)
+                random_player.add_chips(chips_remaining)
+                chips_for_remaining_players -= chips_remaining
+
+                # Divide the rest of the chips equally between the group players
+                chips_per_player = chips_for_remaining_players // remaining_players_to_receive_count
+                for group_player in remaining_players_to_receive:
+                    group_player.add_chips(chips_per_player)
+
+
+        assert self.game.total_pot == 0
     
-    def rank_hands(self):
-        pass
+
+    def calculate_winners(self) -> list[list[Player]]:
+        evaluator = Evaluator()
+
+        for player in self.players_in_the_hand:
+            player.show_down_hand["value"] = evaluator.evaluate(self.game.table_cards, player.cards)
+
+        # Sort players by rank from lowest (best hand) to highest (worst hand)
+        sorted_players = sorted(self.players_in_the_hand, key=lambda player: player.show_down_hand["value"])
+
+        # Group players by rank using defaultdict
+        rank_groups = defaultdict(list)
+        for player in sorted_players:
+            rank_groups[player.show_down_hand["value"]].append(player)
+
+        # Create a list of lists of players, where each list contains players with the same rank
+        return list(rank_groups.values())
 
     def finish_round(self):
         # Assert that there's at least 1 player in the hand
@@ -181,15 +238,10 @@ class Round:
         print("total pot: ", self.game.total_pot)
         print("sum of bets: ", sum([player.round_bet_value for player in self.players.get_players("non_broke")]))
         assert self.game.total_pot == sum([player.round_bet_value for player in self.players.get_players("non_broke")])
+        assert all([player.round_bet_aux == player.round_bet_value for player in self.players.get_players("non_broke")]) 
 
-
-
-        winners = [self.players_in_the_hand[0]]
-        [player.set_turn_state(PlayerTurnState.WAITING_FOR_TURN) for player in winners]
-        all_in_losers = [player for player in self.players.get_players("all_in") if player not in winners]
-        [player.set_turn_state(PlayerTurnState.NOT_PLAYING) for player in all_in_losers]
-
-        self.distribute_pot()
+        order_of_best_hands = self.calculate_winners()
+        self.distribute_pot(order_of_best_hands)
         
         [self.reset_round_player(player) for player in self.players.get_players("all")]
         self.game.table_cards = []
@@ -227,9 +279,10 @@ class Phase:
             assert self.get_min_phase_bet_to_continue() >= 0
             # Check if every player has either folded or bet the minimum to continue
             if current_player:
+                players_waiting_for_turn = self.players.get_players("can_bet_in_current_turn")
                 if current_player.get_played_current_phase() and self.get_min_phase_bet_to_continue() == current_player.phase_bet_value:
                     break
-                elif current_player.turn_state != PlayerTurnState.FOLDED and current_player.turn_state != PlayerTurnState.ALL_IN:
+                elif current_player in players_waiting_for_turn and len(players_waiting_for_turn) > 1:
                     turn = Turn(self, current_player, self.get_min_phase_bet_to_continue())
                     player_turn_bet = await turn.start()
 

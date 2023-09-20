@@ -49,11 +49,6 @@ class PlayerEncoder(json.JSONEncoder):
                 "turn_bet_value": obj.turn_bet_value,
                 "phase_bet_value": obj.phase_bet_value,
                 "round_bet_value": obj.round_bet_value,
-                "bet_reconciled": obj.bet_reconciled,
-                "folded": obj.folded,
-                "is_all_in": obj.is_all_in,
-                "can_raise": obj.can_raise,
-                "stack_investment": obj.stack_investment,
                 "is_robot": obj.is_robot,
                 "turn_state": turn_state_data,
                 "played_current_phase": obj.played_current_phase
@@ -69,25 +64,40 @@ class Player:
         self.round_end_chips = chips
         self.cards: list[Card] = []
         self.show_down_hand = {
+            "value": None,
             "hand": [],
             "descendingSortHand": [],
         }
         self.turn_bet_value: int = 0
         self.phase_bet_value: int = 0
         self.round_bet_value: int = 0
-        self.bet_reconciled = False
-        self.folded = False
-        self.is_all_in = False
-        self.can_raise = True
-        self.stack_investment = 0
+        self.round_bet_aux: int = 0
         self.is_robot = not is_human
         self.turn_state: PlayerTurnState = PlayerTurnState.NOT_PLAYING
         self.played_current_phase = False
         self.game = game
 
+    def reset_round_player(self):
+        self.cards = []
+        self.turn_bet_value = 0
+        self.phase_bet_value = 0
+        self.round_bet_value = 0
+        self.round_bet_aux = 0
+        self.bet_reconciled = False
+        
+        self.can_raise = True
+        self.stack_investment = 0
+        self.played_current_phase = False
+        self.round_start_chips = self.chips
+        self.round_end_chips = self.chips
+        self.show_down_hand =  {
+            "value": None,
+            "hand": [],
+            "descendingSortHand": [],
+        }
+
     def is_broke(self):
         assert self.chips >= 0
-        return self.chips == 0 and self.turn_state != PlayerTurnState.ALL_IN
 
     def is_not_broke(self):
         return not self.is_broke()
@@ -122,7 +132,6 @@ class Player:
                 await self.make_bet_up_to(77)
             elif min_turn_value_to_continue == 200:
                 state = PlayerTurnState.FOLDED
-                self.folded = True
                 self.set_turn_state(state)
             else:
                 await self.make_bet_up_to(min_turn_value_to_continue)
@@ -151,7 +160,6 @@ class Player:
                         print(f"You must bet at least the minimum bet to continue, which is {min_turn_value_to_continue}.")
                 elif action == "f":
                     self.set_turn_state(PlayerTurnState.FOLDED)
-                    self.folded = True
                     break
                 else:
                     print("Invalid action")
@@ -174,7 +182,7 @@ class Player:
             self.set_turn_bet_value(self.turn_bet_value + amount)
             self.set_phase_bet_value(self.phase_bet_value + amount)
             self.set_round_bet_value(self.round_bet_value + amount)
-            self.set_chips(self.chips - amount)
+            self.remove_chips(amount)
             await self.game.add_to_pot(amount)
             return True
         else:
@@ -193,9 +201,6 @@ class Player:
         await self.make_bet(blind_value)
         self.set_turn_bet_value(0)
 
-    def set_chips(self, amount: int):
-        self.chips = amount
-
     def set_turn_bet_value(self, amount: int):
         self.turn_bet_value = amount
 
@@ -210,6 +215,7 @@ class Player:
 
     def set_round_bet_value(self, amount: int):
         self.round_bet_value = amount
+        self.round_bet_aux = amount
 
     def get_round_bet_value(self):
         return self.round_bet_value
@@ -219,6 +225,10 @@ class Player:
 
     def get_played_current_phase(self):
         return self.played_current_phase
+
+    def remove_chips(self, amount: int):
+        assert self.chips >= amount
+        self.chips -= amount
     
     def add_chips(self, amount: int):
         self.chips += amount
@@ -253,11 +263,11 @@ class Players:
         elif group == "non_broke":
             condition = lambda player: player.is_not_broke()
         elif group == "can_bet_in_current_turn":
-            condition = lambda player: player.is_not_broke() and not player.folded and not player.is_all_in
+            condition = lambda player: player.is_not_broke() and player.get_turn_state() != PlayerTurnState.FOLDED and player.get_turn_state() != PlayerTurnState.ALL_IN
         elif group == "active_in_hand":
-            condition = lambda player: player.is_not_broke() and not player.folded
+            condition = lambda player: player.is_not_broke() and player.get_turn_state() != PlayerTurnState.FOLDED
         elif group == "all_in":
-            condition = lambda player: player.is_all_in
+            condition = lambda player: player.get_turn_state() == PlayerTurnState.ALL_IN
 
         return [player for player in self.initial_players if condition(player)]
 
