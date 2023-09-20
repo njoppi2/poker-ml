@@ -11,22 +11,20 @@ const Input = styled(MuiInput)`
   width: 42px;
 `;
 
-export default function InputSlider({ min, max }) { // Updated the function signature to accept min and max as props
-    const [value, setValue] = React.useState(min);
-
+export default function InputSlider({ min, max, value, onValueChange }) {
     const handleSliderChange = (event, newValue) => {
-        setValue(newValue);
+        onValueChange(newValue);
     };
 
     const handleInputChange = (event) => {
-        setValue(event.target.value === '' ? min : Number(event.target.value));
+        onValueChange(event.target.value === '' ? min : Number(event.target.value));
     };
 
     const handleBlur = () => {
         if (value < min) {
-            setValue(min);
+            onValueChange(min);
         } else if (value > max) {
-            setValue(max);
+            onValueChange(max);
         }
     };
 

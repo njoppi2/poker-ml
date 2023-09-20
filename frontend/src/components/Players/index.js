@@ -52,7 +52,7 @@ const Player = ({ players }) => {
                         <div>Bet: {player.phase_bet_value}</div>
                         {/* Add other player-related information */}
                         <div className='cards' style={player.is_robot ? {} : { display: 'None' }}>
-                            <Cards cards={player.cards} />
+                            <Cards cards={player.cards} height={30} />
                         </div>
                     </div>
                 ))
