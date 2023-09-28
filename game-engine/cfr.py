@@ -1,15 +1,43 @@
 class CFR:
+    """
+    Class that implements the Counterfactual Regret Minimization algorithm for solving
+    sequential games with imperfect information. It uses regret matching to compute
+    a strategy profile for each player.
+    """
     def __init__(self, game):
+        """
+        Initializes the CFR algorithm with the given game.
+
+        Args:
+        - game: an instance of the Game class representing the game to be solved.
+        """
         self.game = game
         self.regret_sum = defaultdict(lambda: np.zeros(game.num_actions))
         self.strategy = defaultdict(lambda: np.zeros(game.num_actions))
         self.strategy_sum = defaultdict(lambda: np.zeros(game.num_actions))
 
     def train(self, num_iterations):
+        """
+        Trains the CFR algorithm for a given number of iterations.
+
+        Args:
+        - num_iterations: an integer representing the number of iterations to run.
+        """
         for i in range(num_iterations):
             self.cfr(self.game.root, 1, 1)
 
     def cfr(self, node, p0, p1):
+        """
+        Computes the counterfactual regret for each action in the given node.
+
+        Args:
+        - node: an instance of the Node class representing the current node in the game tree.
+        - p0: a float representing the probability of reaching the current node for player 0.
+        - p1: a float representing the probability of reaching the current node for player 1.
+
+        Returns:
+        - node_util: a float representing the expected utility of the current node.
+        """
         if node.is_terminal():
             return node.payoff()
 
@@ -46,6 +74,15 @@ class CFR:
             return node_util
 
     def get_strategy(self, node):
+        """
+        Computes the strategy profile for the given node.
+
+        Args:
+        - node: an instance of the Node class representing the current node in the game tree.
+
+        Returns:
+        - a numpy array representing the strategy profile for the current node.
+        """
         infoset = node.infoset()
         normalizing_sum = sum(self.strategy_sum[infoset])
         if normalizing_sum > 0:
@@ -54,6 +91,9 @@ class CFR:
             return np.ones(self.game.num_actions) / self.game.num_actions
 
     def update_strategy(self):
+        """
+        Updates the strategy profile for each information set based on the accumulated regret.
+        """
         for infoset in self.regret_sum:
             regret = self.regret_sum[infoset]
             positive_regret = np.maximum(regret, 0)
