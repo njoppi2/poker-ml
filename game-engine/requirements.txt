@@ -1,0 +1,4 @@
+axios
+uuid
+websockets
+treys

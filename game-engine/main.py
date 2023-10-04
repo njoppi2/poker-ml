@@ -30,7 +30,7 @@ if __name__ == "__main__":
         loop = asyncio.get_event_loop()
 
         # Start the WebSocket server
-        start_server = websockets.serve(handle_client, "localhost", 3002)
+        start_server = websockets.serve(handle_client, "0.0.0.0", 3002)
 
         # Run the server within the event loop
         loop.run_until_complete(start_server)
