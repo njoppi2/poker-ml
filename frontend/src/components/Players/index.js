@@ -4,7 +4,6 @@ import Cards from '../Cards';
 
 const Player = ({ players }) => {
     const initial_players = players?.initial_players || [];
-    const interval = 100;
     const playerPosition = [
         { top: 'calc(50% - 45px)', left: `calc(4% + 10px)` },
         { top: '20px', left: `calc(30% - 45px)` },
