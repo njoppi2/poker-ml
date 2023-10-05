@@ -11,6 +11,8 @@ import websockets
 import json
 import re
 
+from cfr import CFR
+from game import Game
 
 class PlayerTurnState(Enum):
     NOT_PLAYING = "NOT_PLAYING"
@@ -136,6 +138,27 @@ class Player:
                 print("Invalid input. Please enter a valid integer.")
 
     async def ai_play(self, min_turn_value_to_continue: int):
+        # create a game instance
+        game = Game()
+
+        # create a CFR instance
+        cfr = CFR(game)
+
+        # train the CFR algorithm for 1000 iterations
+        cfr.train(1000)
+
+        # get the strategy profile for the root node
+        root_node = game.root_node()
+        strategy = cfr.get_strategy(root_node)
+
+        # print the strategy profile
+        print(strategy)
+        
+        self.set_played_current_phase(True)
+        
+    #legacy AI
+    """ 
+    async def ai_play(self, min_turn_value_to_continue: int):
         time.sleep(1)  # Pause execution for 2 seconds
         print("min_turn_value_to_continue: ", min_turn_value_to_continue)
         if self.chips < 100:
@@ -155,7 +178,8 @@ class Player:
                     await self.make_bet_up_to(min_turn_value_to_continue + 40)
             if self.get_turn_state() == PlayerTurnState.PLAYING_TURN:
                 self.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
-        self.set_played_current_phase(True)
+        self.set_played_current_phase(True) 
+        """
 
     async def play(self, min_turn_value_to_continue: int):
         if self.is_robot:
