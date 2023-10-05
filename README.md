@@ -3,5 +3,5 @@
 ## rodar
 make start
 
-## parar de roadr 
+## parar de rodar 
 make stop
