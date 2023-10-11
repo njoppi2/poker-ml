@@ -1,5 +1,6 @@
 import random
 import collections
+import logging
 from enum import Enum
 
 class Actions(Enum):
@@ -12,6 +13,19 @@ class KuhnTrainer:
 
     def __init__(self):
         self.nodeMap = {}
+        self.log_file = None
+
+    def log(self, log_file):
+        self.log_file = log_file
+        log_format = 'Iteration: %(index)s\nAverage game value: %(avg_game_value)s\n%(result_dict)s\n'
+        formatter = logging.Formatter(log_format)
+
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setFormatter(formatter)
+
+        self.logger = logging.getLogger('')
+        self.logger.setLevel(logging.DEBUG)
+        self.logger.addHandler(file_handler)
     
     class Node:
         def __init__(self):
@@ -21,6 +35,7 @@ class KuhnTrainer:
             self.strategySum = [0.0] * NUM_ACTIONS
 
         def getStrategy(self, realizationWeight):
+            """Turn sum of regrets into a probability distribution for actions."""
             normalizingSum = sum(max(regret, 0) for regret in self.regretSum)
             for action in Actions:
                 if normalizingSum > 0:
@@ -49,7 +64,14 @@ class KuhnTrainer:
         for i in range(iterations):
             random.shuffle(cards)
             util += self.cfr(cards, "", 1, 1)
-        
+
+            sample_iteration = {
+                'index': i,
+                'avg_game_value': util / (i + 1),
+                'result_dict': self.nodeMap  # Assuming self.nodeMap contains the result dictionary
+            }
+            self.logger.info('', extra=sample_iteration)
+            
         print(f"Average game value: {util / iterations}")
         for n in self.nodeMap.values():
             print(n)
@@ -101,4 +123,5 @@ class KuhnTrainer:
 if __name__ == "__main__":
     iterations = 100000
     trainer = KuhnTrainer()
+    trainer.log('cfr.log')
     trainer.train(iterations)
