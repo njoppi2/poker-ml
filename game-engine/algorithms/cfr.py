@@ -66,28 +66,28 @@ class KuhnTrainer:
 
             if terminalPass:
                 if history == "pp":
-                    return 1 if isPlayerCardHigher else -1
+                    return 1 if isPlayerCardHigher else -1          #determina a recompensa
                 else:
                     return 1
             elif doubleBet:
-                return 2 if isPlayerCardHigher else -2
+                return 2 if isPlayerCardHigher else -2              #determina a recompensa
 
-        infoSet = str(cards[player]) + history
-        node = self.nodeMap.get(infoSet)
+        infoSet = str(cards[player]) + history                      #determina o infoset olhando a carta do jogador atual e o histórico
+        node = self.nodeMap.get(infoSet)                            #tenta pegar o nodo do infoset correspondente
 
-        if node is None:
+        if node is None:                                            #se não existir, cria um novo nodo
             node = self.Node()
             node.infoSet = infoSet
             self.nodeMap[infoSet] = node
 
-        strategy = node.getStrategy(p0 if player == 0 else p1)
+        strategy = node.getStrategy(p0 if player == 0 else p1)      #pega a estratégia do nodo. ******************entender melhor******************
         util = [0.0] * NUM_ACTIONS
         nodeUtil = 0
 
-        for action in Actions:
+        for action in Actions:                                      #itera entre todas as acoes possiveis, calculando a utilidade esperada. Possivelmente eh aqui que implemente o MCCFR
             nextHistory = history + ('p' if action == Actions.PASS else 'b')
             if player == 0:
-                util[action.value] = -self.cfr(cards, nextHistory, p0 * strategy[action.value], p1)
+                util[action.value] = -self.cfr(cards, nextHistory, p0 * strategy[action.value], p1) #aqui implementa a recursao, percorrendo os nodos e calculando a utilidade esperada
             else:
                 util[action.value] = -self.cfr(cards, nextHistory, p0, p1 * strategy[action.value])
             nodeUtil += strategy[action.value] * util[action.value]
