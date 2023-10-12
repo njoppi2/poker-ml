@@ -20,7 +20,8 @@ class KuhnTrainer:
         log_format = 'Iteration: %(index)s\nAverage game value: %(avg_game_value)s\n%(result_dict)s\n'
         formatter = logging.Formatter(log_format)
 
-        file_handler = logging.FileHandler(log_file)
+        # Change the file mode to 'w' for overwriting the log file
+        file_handler = logging.FileHandler(log_file, mode='w')
         file_handler.setFormatter(formatter)
 
         self.logger = logging.getLogger('')
@@ -123,5 +124,5 @@ class KuhnTrainer:
 if __name__ == "__main__":
     iterations = 100000
     trainer = KuhnTrainer()
-    trainer.log('cfr.log')
+    trainer.log('../logs/cfr.log')
     trainer.train(iterations)
