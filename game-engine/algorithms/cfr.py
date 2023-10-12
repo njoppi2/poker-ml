@@ -124,5 +124,5 @@ class KuhnTrainer:
 if __name__ == "__main__":
     iterations = 100000
     trainer = KuhnTrainer()
-    trainer.log('../logs/cfr.log')
+    trainer.log('../analysis/logs/cfr.log')
     trainer.train(iterations)

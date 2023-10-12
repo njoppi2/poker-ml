@@ -1,5 +1,6 @@
 import random
 import collections
+import logging
 from enum import Enum
 
 class Actions(Enum):
@@ -12,6 +13,20 @@ class KuhnTrainer:
 
     def __init__(self):
         self.nodeMap = {}
+        self.log_file = None
+
+    def log(self, log_file):
+        self.log_file = log_file
+        log_format = 'Iteration: %(index)s\nAverage game value: %(avg_game_value)s\n%(result_dict)s\n'
+        formatter = logging.Formatter(log_format)
+
+        # Change the file mode to 'w' for overwriting the log file
+        file_handler = logging.FileHandler(log_file, mode='w')
+        file_handler.setFormatter(formatter)
+
+        self.logger = logging.getLogger('')
+        self.logger.setLevel(logging.DEBUG)
+        self.logger.addHandler(file_handler)
     
     class Node:
         def __init__(self):
@@ -21,6 +36,7 @@ class KuhnTrainer:
             self.strategySum = [0.0] * NUM_ACTIONS
 
         def getStrategy(self, realizationWeight):
+            """Turn sum of regrets into a probability distribution for actions."""
             normalizingSum = sum(max(regret, 0) for regret in self.regretSum)
             for action in Actions:
                 if normalizingSum > 0:
@@ -49,7 +65,14 @@ class KuhnTrainer:
         for i in range(iterations):
             random.shuffle(cards)
             util += self.mccfr(cards, "", 1, 1)
-        
+
+            sample_iteration = {
+                'index': i,
+                'avg_game_value': util / (i + 1),
+                'result_dict': self.nodeMap  # Assuming self.nodeMap contains the result dictionary
+            }
+            self.logger.info('', extra=sample_iteration)
+            
         print(f"Average game value: {util / iterations}")
         for n in self.nodeMap.values():
             print(n)
@@ -66,33 +89,30 @@ class KuhnTrainer:
 
             if terminalPass:
                 if history == "pp":
-                    return 1 if isPlayerCardHigher else -1
+                    return 1 if isPlayerCardHigher else -1          #determina a recompensa
                 else:
                     return 1
             elif doubleBet:
-                return 2 if isPlayerCardHigher else -2
+                return 2 if isPlayerCardHigher else -2              #determina a recompensa
 
-        infoSet = str(cards[player]) + history
-        node = self.nodeMap.get(infoSet)
+        infoSet = str(cards[player]) + history                      #determina o infoset olhando a carta do jogador atual e o histórico
+        node = self.nodeMap.get(infoSet)                            #tenta pegar o nodo do infoset correspondente
 
-        if node is None:
+        if node is None:                                            #se não existir, cria um novo nodo
             node = self.Node()
             node.infoSet = infoSet
             self.nodeMap[infoSet] = node
 
-        strategy = node.getStrategy(p0 if player == 0 else p1)
+        strategy = node.getStrategy(p0 if player == 0 else p1)      #pega a estratégia do nodo. ******************entender melhor******************
         util = [0.0] * NUM_ACTIONS
         nodeUtil = 0
 
-        # Monte Carlo sampling
-        sampleCards = cards.copy()
-        random.shuffle(sampleCards)
-        for action in Actions:
+        for action in Actions:                                      #itera entre todas as acoes possiveis, calculando a utilidade esperada. Possivelmente eh aqui que implemente o MCmccfr
             nextHistory = history + ('p' if action == Actions.PASS else 'b')
             if player == 0:
-                util[action.value] = -self.mccfr(sampleCards, nextHistory, p0 * strategy[action.value], p1)
+                util[action.value] = -self.mccfr(cards, nextHistory, p0 * strategy[action.value], p1) #aqui implementa a recursao, percorrendo os nodos e calculando a utilidade esperada
             else:
-                util[action.value] = -self.mccfr(sampleCards, nextHistory, p0, p1 * strategy[action.value])
+                util[action.value] = -self.mccfr(cards, nextHistory, p0, p1 * strategy[action.value])
             nodeUtil += strategy[action.value] * util[action.value]
 
         for action in Actions:
@@ -104,4 +124,5 @@ class KuhnTrainer:
 if __name__ == "__main__":
     iterations = 100000
     trainer = KuhnTrainer()
+    trainer.log('../analysis/logs/mccfr.log')
     trainer.train(iterations)

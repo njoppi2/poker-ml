@@ -23,4 +23,6 @@ yarn-error.log*
 
 frontend2
 
+game-engine/analysis/logs/**
+
 **/__pycache__
