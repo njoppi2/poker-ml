@@ -65,11 +65,14 @@ class KuhnTrainer:
         for i in range(iterations):
             random.shuffle(cards)
             util += self.cfr(cards, "", 1, 1)
-
+            
+            dict = ""
+            for n in self.nodeMap.values():
+                dict += str(n) + "\n"
             sample_iteration = {
                 'index': i,
                 'avg_game_value': util / (i + 1),
-                'result_dict': self.nodeMap  # Assuming self.nodeMap contains the result dictionary
+                'result_dict': dict  # Assuming self.nodeMap contains the result dictionary
             }
             self.logger.info('', extra=sample_iteration)
             
@@ -102,6 +105,7 @@ class KuhnTrainer:
             node = self.Node()
             node.infoSet = infoSet
             self.nodeMap[infoSet] = node
+            #print(infoSet)
 
         strategy = node.getStrategy(p0 if player == 0 else p1)      #pega a estratégia do nodo. ******************entender melhor******************
         util = [0.0] * NUM_ACTIONS
@@ -122,7 +126,7 @@ class KuhnTrainer:
         return nodeUtil
 
 if __name__ == "__main__":
-    iterations = 100000
+    iterations = 50
     trainer = KuhnTrainer()
     trainer.log('../analysis/logs/cfr.log')
     trainer.train(iterations)
