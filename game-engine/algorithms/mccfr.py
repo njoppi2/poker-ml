@@ -46,6 +46,18 @@ class KuhnTrainer:
                 self.strategySum[action.value] += realizationWeight * self.strategy[action.value]
             return self.strategy
 
+        def get_action(self, strategy):
+            """Returns an action based on the strategy."""
+            r = random.random()
+            cumulative_probability = 0
+            
+            for action in Actions:
+                cumulative_probability += strategy[action.value]
+                if r < cumulative_probability:
+                    return action.value
+            
+            raise Exception("No action taken for r: " + str(r) + " and cumulativeProbability: " + str(cumulative_probability) + " and strategy: " + str(strategy))
+
         def getAverageStrategy(self):
             avgStrategy = [0.0] * NUM_ACTIONS
             normalizingSum = sum(self.strategySum)
@@ -60,16 +72,19 @@ class KuhnTrainer:
             return f"{self.infoSet}: {self.getAverageStrategy()}"
 
     def train(self, iterations):
-        cards = [1, 2, 3]
+        cards = [1, 2, 3, 4, 5, 6, 7, 8, 9]
         util = 0
         for i in range(iterations):
             random.shuffle(cards)
-            util += self.mccfr(cards, "", 1, 1)
-
+            util += self.cfr(cards, "", 1, 1)
+            
+            dict = ""
+            for n in self.nodeMap.values():
+                dict += str(n) + "\n"
             sample_iteration = {
                 'index': i,
                 'avg_game_value': util / (i + 1),
-                'result_dict': self.nodeMap  # Assuming self.nodeMap contains the result dictionary
+                'result_dict': dict  # Assuming self.nodeMap contains the result dictionary
             }
             self.logger.info('', extra=sample_iteration)
             
@@ -102,12 +117,13 @@ class KuhnTrainer:
             node = self.Node()
             node.infoSet = infoSet
             self.nodeMap[infoSet] = node
+            #print(infoSet)
 
-        strategy = node.getStrategy(p0 if player == 0 else p1)      #pega a estratégia do nodo. ******************entender melhor******************
+        strategy = node.getStrategy(p0 if player == 0 else p1)      #pega a estratégia do nodo, que é um vetor de probabilidades para cada ação.
         util = [0.0] * NUM_ACTIONS
         nodeUtil = 0
 
-        for action in Actions:                                      #itera entre todas as acoes possiveis, calculando a utilidade esperada. Possivelmente eh aqui que implemente o MCmccfr
+        for action in Actions:
             nextHistory = history + ('p' if action == Actions.PASS else 'b')
             if player == 0:
                 util[action.value] = -self.mccfr(cards, nextHistory, p0 * strategy[action.value], p1) #aqui implementa a recursao, percorrendo os nodos e calculando a utilidade esperada
@@ -122,7 +138,7 @@ class KuhnTrainer:
         return nodeUtil
 
 if __name__ == "__main__":
-    iterations = 100000
+    iterations = 10000
     trainer = KuhnTrainer()
     trainer.log('../analysis/logs/mccfr.log')
     trainer.train(iterations)

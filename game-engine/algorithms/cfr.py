@@ -60,7 +60,7 @@ class KuhnTrainer:
             return f"{self.infoSet}: {self.getAverageStrategy()}"
 
     def train(self, iterations):
-        cards = [1, 2, 3]
+        cards = [1, 2, 3, 4, 5, 6, 7, 8, 9]
         util = 0
         for i in range(iterations):
             random.shuffle(cards)
@@ -126,7 +126,7 @@ class KuhnTrainer:
         return nodeUtil
 
 if __name__ == "__main__":
-    iterations = 50
+    iterations = 10000
     trainer = KuhnTrainer()
     trainer.log('../analysis/logs/cfr.log')
     trainer.train(iterations)
