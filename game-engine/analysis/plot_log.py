@@ -18,7 +18,7 @@ def parse_log(log_file):
 
 # Main function to plot the graph
 def main():
-    log_file = 'logs/cfr.log'  # Specify the name of your log file
+    log_file = 'logs/mccfr.log'  # Specify the name of your log file
     avg_game_values = parse_log(log_file)
 
     # Create a list of iteration numbers
