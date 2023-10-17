@@ -2,6 +2,7 @@ import random
 import collections
 import logging
 from enum import Enum
+import os
 
 class Actions(Enum):
     PASS = 0
@@ -16,6 +17,14 @@ class KuhnTrainer:
         self.log_file = None
 
     def log(self, log_file):
+
+        log_dir = os.path.dirname(log_file)
+        if log_dir != '' and not os.path.exists(log_dir):
+            os.makedirs(log_dir)  # If the directory doesn't exist, create it
+
+        if not os.path.exists(log_file):
+            open(log_file, 'w').close()  # If it doesn't exist, create the file
+
         self.log_file = log_file
         log_format = 'Iteration: %(index)s\nAverage game value: %(avg_game_value)s\n%(result_dict)s\n'
         formatter = logging.Formatter(log_format)
@@ -27,7 +36,7 @@ class KuhnTrainer:
         self.logger = logging.getLogger('')
         self.logger.setLevel(logging.DEBUG)
         self.logger.addHandler(file_handler)
-    
+
     class Node:
         def __init__(self):
             self.infoSet = ""
@@ -72,11 +81,11 @@ class KuhnTrainer:
             return f"{self.infoSet}: {self.getAverageStrategy()}"
 
     def train(self, iterations):
-        cards = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+        cards = [1, 2, 3]#, 4, 5, 6, 7, 8, 9]
         util = 0
         for i in range(iterations):
             random.shuffle(cards)
-            util += self.cfr(cards, "", 1, 1)
+            util += self.mccfr(cards, "", 1, 1)
             
             dict = ""
             for n in self.nodeMap.values():
@@ -91,6 +100,15 @@ class KuhnTrainer:
         print(f"Average game value: {util / iterations}")
         for n in self.nodeMap.values():
             print(n)
+
+    def play(self, cards, history, p0, p1, action, util, nodeUtil, player, strategy):
+        nextHistory = history + ('p' if action == Actions.PASS.value else 'b')
+        if player == 0:
+            util[action] = -self.mccfr(cards, nextHistory, p0 * strategy[action], p1)
+        else:
+            util[action] = -self.mccfr(cards, nextHistory, p0, p1 * strategy[action])
+        nodeUtil += strategy[action] * util[action]
+
 
     def mccfr(self, cards, history, p0, p1):
         plays = len(history)
@@ -123,13 +141,12 @@ class KuhnTrainer:
         util = [0.0] * NUM_ACTIONS
         nodeUtil = 0
 
-        for action in Actions:
-            nextHistory = history + ('p' if action == Actions.PASS else 'b')
-            if player == 0:
-                util[action.value] = -self.mccfr(cards, nextHistory, p0 * strategy[action.value], p1) #aqui implementa a recursao, percorrendo os nodos e calculando a utilidade esperada
-            else:
-                util[action.value] = -self.mccfr(cards, nextHistory, p0, p1 * strategy[action.value])
-            nodeUtil += strategy[action.value] * util[action.value]
+        actions_in_order = list(Actions)  # Get a list of actions in the order of the enum
+        first_action = node.get_action(strategy)
+        actions_in_order.remove(Actions(first_action))  # Remove the first action from the list
+
+        for action in [first_action] + [a.value for a in actions_in_order]:
+            self.play(cards, history, p0, p1, action, util, nodeUtil, player, strategy)
 
         for action in Actions:
             regret = util[action.value] - nodeUtil
