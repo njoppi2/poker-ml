@@ -79,6 +79,10 @@ class KuhnTrainer:
 
         def __str__(self):
             return f"{self.infoSet}: {self.getAverageStrategy()}"
+        
+        def __lt__(self, other):
+            return self.infoSet < other.infoSet
+
 
     def train(self, iterations):
         cards = [1, 2, 3]#, 4, 5, 6, 7, 8, 9]
@@ -98,7 +102,7 @@ class KuhnTrainer:
             self.logger.info('', extra=sample_iteration)
             
         print(f"Average game value: {util / iterations}")
-        for n in self.nodeMap.values():
+        for n in sorted(self.nodeMap.values()):
             print(n)
 
     def play(self, cards, history, p0, p1, action, util, nodeUtil, player, strategy):
