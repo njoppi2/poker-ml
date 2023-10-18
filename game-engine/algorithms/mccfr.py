@@ -3,7 +3,7 @@ import collections
 import logging
 from enum import Enum
 import os
-
+random.seed(42)
 class Actions(Enum):
     PASS = 0
     BET = 1
@@ -13,11 +13,10 @@ NUM_ACTIONS = len(Actions)
 class KuhnTrainer:
 
     def __init__(self):
-        self.nodeMap = {}
+        self.node_map = {}
         self.log_file = None
 
     def log(self, log_file):
-
         log_dir = os.path.dirname(log_file)
         if log_dir != '' and not os.path.exists(log_dir):
             os.makedirs(log_dir)  # If the directory doesn't exist, create it
@@ -29,30 +28,32 @@ class KuhnTrainer:
         log_format = 'Iteration: %(index)s\nAverage game value: %(avg_game_value)s\n%(result_dict)s\n'
         formatter = logging.Formatter(log_format)
 
-        # Change the file mode to 'w' for overwriting the log file
-        file_handler = logging.FileHandler(log_file, mode='w')
-        file_handler.setFormatter(formatter)
+        with open(log_file, 'w') as file:
+            file_handler = logging.FileHandler(log_file, mode='w')
+            file_handler.setFormatter(formatter)
 
-        self.logger = logging.getLogger('')
-        self.logger.setLevel(logging.DEBUG)
-        self.logger.addHandler(file_handler)
+            self.logger = logging.getLogger('')
+            self.logger.setLevel(logging.DEBUG)
+            self.logger.addHandler(file_handler)
 
     class Node:
-        def __init__(self):
-            self.infoSet = ""
-            self.regretSum = [0.0] * NUM_ACTIONS
+        """ A node is an information set, which is the cards of the player and the history of the game."""
+        def __init__(self, info_set):
+            self.info_set = info_set
+            # The regret and strategies of a node refer to the last action taken to reach the node
+            self.regret_sum = [0.0] * NUM_ACTIONS
             self.strategy = [0.0] * NUM_ACTIONS
-            self.strategySum = [0.0] * NUM_ACTIONS
+            self.strategy_sum = [0.0] * NUM_ACTIONS
 
-        def getStrategy(self, realizationWeight):
+        def get_strategy(self, realization_weight):
             """Turn sum of regrets into a probability distribution for actions."""
-            normalizingSum = sum(max(regret, 0) for regret in self.regretSum)
+            normalizing_sum = sum(max(regret, 0) for regret in self.regret_sum)
             for action in Actions:
-                if normalizingSum > 0:
-                    self.strategy[action.value] = max(self.regretSum[action.value], 0) / normalizingSum
+                if normalizing_sum > 0:
+                    self.strategy[action.value] = max(self.regret_sum[action.value], 0) / normalizing_sum
                 else:
                     self.strategy[action.value] = 1.0 / NUM_ACTIONS
-                self.strategySum[action.value] += realizationWeight * self.strategy[action.value]
+                self.strategy_sum[action.value] += realization_weight * self.strategy[action.value]
             return self.strategy
 
         def get_action(self, strategy):
@@ -63,55 +64,62 @@ class KuhnTrainer:
             for action in Actions:
                 cumulative_probability += strategy[action.value]
                 if r < cumulative_probability:
-                    return action.value
+                    return action
             
             raise Exception("No action taken for r: " + str(r) + " and cumulativeProbability: " + str(cumulative_probability) + " and strategy: " + str(strategy))
 
-        def getAverageStrategy(self):
-            avgStrategy = [0.0] * NUM_ACTIONS
-            normalizingSum = sum(self.strategySum)
+        def get_average_strategy(self):
+            avg_strategy = [0.0] * NUM_ACTIONS
+            normalizing_sum = sum(self.strategy_sum)
             for action in Actions:
-                if normalizingSum > 0:
-                    avgStrategy[action.value] = self.strategySum[action.value] / normalizingSum
+                if normalizing_sum > 0:
+                    avg_strategy[action.value] = self.strategy_sum[action.value] / normalizing_sum
                 else:
-                    avgStrategy[action.value] = 1.0 / NUM_ACTIONS
-            return avgStrategy
+                    avg_strategy[action.value] = 1.0 / NUM_ACTIONS
+            return avg_strategy
 
         def __str__(self):
-            return f"{self.infoSet}: {self.getAverageStrategy()}"
+            return f"{self.info_set}: {self.get_average_strategy()}"
         
         def __lt__(self, other):
-            return self.infoSet < other.infoSet
+            return self.info_set < other.info_set
 
 
     def train(self, iterations):
         cards = [1, 2, 3]#, 4, 5, 6, 7, 8, 9]
-        util = 0
+        sum_of_rewards = 0
         for i in range(iterations):
             random.shuffle(cards)
-            util += self.mccfr(cards, "", 1, 1)
+            sum_of_rewards += self.mccfr(cards, "", 1, 1)
             
             dict = ""
-            for n in self.nodeMap.values():
+            for n in self.node_map.values():
                 dict += str(n) + "\n"
             sample_iteration = {
                 'index': i,
-                'avg_game_value': util / (i + 1),
+                'avg_game_value': sum_of_rewards / (i + 1),
                 'result_dict': dict  # Assuming self.nodeMap contains the result dictionary
             }
             self.logger.info('', extra=sample_iteration)
             
-        print(f"Average game value: {util / iterations}")
-        for n in sorted(self.nodeMap.values()):
+        print(f"Average game value: {sum_of_rewards / iterations}")
+        for n in sorted(self.node_map.values()):
             print(n)
 
-    def play(self, cards, history, p0, p1, action, util, nodeUtil, player, strategy):
-        nextHistory = history + ('p' if action == Actions.PASS.value else 'b')
+    def get_node(self, info_set):
+        """Returns a node for the given information set. Creates the node if it doesn't exist."""
+        return self.node_map.setdefault(info_set, self.Node(info_set))
+
+
+    def play(self, cards, history, p0, p1, action, node_actions_rewards, player, strategy):
+        next_history = history + ('p' if action == Actions.PASS else 'b')
         if player == 0:
-            util[action] = -self.mccfr(cards, nextHistory, p0 * strategy[action], p1)
+            node_actions_rewards[action.value] = -self.mccfr(cards, next_history, p0 * strategy[action.value], p1)
         else:
-            util[action] = -self.mccfr(cards, nextHistory, p0, p1 * strategy[action])
-        nodeUtil += strategy[action] * util[action]
+            node_actions_rewards[action.value] = -self.mccfr(cards, next_history, p0, p1 * strategy[action.value])
+        node_reward = 0
+        node_reward += strategy[action.value] * node_actions_rewards[action.value]
+        return node_reward
 
 
     def mccfr(self, cards, history, p0, p1):
@@ -120,43 +128,39 @@ class KuhnTrainer:
         opponent = 1 - player
 
         if plays > 1:
-            terminalPass = history[-1] == 'p'
-            doubleBet = history[-2:] == 'bb'
-            isPlayerCardHigher = cards[player] > cards[opponent]
+            terminal_pass = history[-1] == 'p'
+            double_bet = history[-2:] == 'bb'
+            is_player_card_higher = cards[player] > cards[opponent]
 
-            if terminalPass:
+            if terminal_pass:
                 if history == "pp":
-                    return 1 if isPlayerCardHigher else -1          #determina a recompensa
+                    return 1 if is_player_card_higher else -1          #determina a recompensa
                 else:
                     return 1
-            elif doubleBet:
-                return 2 if isPlayerCardHigher else -2              #determina a recompensa
+            elif double_bet:
+                return 2 if is_player_card_higher else -2              #determina a recompensa
 
-        infoSet = str(cards[player]) + history                      #determina o infoset olhando a carta do jogador atual e o histórico
-        node = self.nodeMap.get(infoSet)                            #tenta pegar o nodo do infoset correspondente
+        info_set = str(cards[player]) + history                      #determina o infoset olhando a carta do jogador atual e o histórico
+        node = self.get_node(info_set)
 
-        if node is None:                                            #se não existir, cria um novo nodo
-            node = self.Node()
-            node.infoSet = infoSet
-            self.nodeMap[infoSet] = node
-            #print(infoSet)
+        strategy = node.get_strategy(p0 if player == 0 else p1)      #pega a estratégia do nodo, que é um vetor de probabilidades para cada ação.
+        node_actions_rewards = [0.0] * NUM_ACTIONS
+        node_reward_sum = 0
 
-        strategy = node.getStrategy(p0 if player == 0 else p1)      #pega a estratégia do nodo, que é um vetor de probabilidades para cada ação.
-        util = [0.0] * NUM_ACTIONS
-        nodeUtil = 0
+        other_actions = list(Actions)  # Get a list of actions in the order of the enum
+        chosen_action = node.get_action(strategy)
+        other_actions.remove(Actions(chosen_action))  # Remove the first action from the list
 
-        actions_in_order = list(Actions)  # Get a list of actions in the order of the enum
-        first_action = node.get_action(strategy)
-        actions_in_order.remove(Actions(first_action))  # Remove the first action from the list
+        self.play(cards, history, p0, p1, chosen_action, node_actions_rewards, player, strategy)
 
-        for action in [first_action] + [a.value for a in actions_in_order]:
-            self.play(cards, history, p0, p1, action, util, nodeUtil, player, strategy)
+        for action in other_actions:
+            self.play(cards, history, p0, p1, action, node_actions_rewards, player, strategy)
 
         for action in Actions:
-            regret = util[action.value] - nodeUtil
-            node.regretSum[action.value] += (p1 if player == 0 else p0) * regret
+            regret = node_actions_rewards[action.value] - node_reward_sum
+            node.regret_sum[action.value] += (p1 if player == 0 else p0) * regret
 
-        return nodeUtil
+        return node_reward_sum
 
 if __name__ == "__main__":
     iterations = 10000
