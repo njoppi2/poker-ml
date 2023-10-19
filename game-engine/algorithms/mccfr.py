@@ -113,14 +113,13 @@ class KuhnTrainer:
 
     def play(self, cards, history, p0, p1, strategy, player, action):
         next_history = history + ('p' if action == Actions.PASS else 'b')
-        node_action_utility = None
+        node_action_utility = 0
         if player == 0:
             node_action_utility = -self.mccfr(cards, next_history, p0 * strategy[action.value], p1)
         else:
             node_action_utility = -self.mccfr(cards, next_history, p0, p1 * strategy[action.value])
-        node_utility_update = strategy[action.value] * node_action_utility
 
-        return node_action_utility, node_utility_update
+        return node_action_utility
 
 
     def mccfr(self, cards, history, p0, p1):
@@ -146,26 +145,26 @@ class KuhnTrainer:
 
         strategy = node.get_strategy(p0 if player == 0 else p1)
         node_actions_utilities = [0.0] * NUM_ACTIONS
-        node_utility = 0
 
-        # other_actions = list(Actions)  # Get a list of actions in the order of the enum
-        # chosen_action = node.get_action(strategy)
-        # other_actions.remove(Actions(chosen_action))  # Remove the first action from the list
+        other_actions = list(Actions)  # Get a list of actions in the order of the enum
+        chosen_action = node.get_action(strategy)
+        other_actions.remove(Actions(chosen_action))  # Remove the first action from the list
 
         # Play chosen action according to the strategy
+        node_chosen_action_utility = self.play(cards, history, p0, p1, strategy, player, chosen_action)
+        node_actions_utilities[chosen_action.value] = node_chosen_action_utility
 
         # Play for other actions
-        for action in Actions:
+        for action in other_actions:
             # passar um parametro para mccfr dizendo que se é jogada alternativa, e de quê jogador, se for do jogador 1, ai não tem for na jogada do jogador 0
-            node_action_utility, node_utility_update = self.play(cards, history, p0, p1, strategy, player, action)
+            node_action_utility = self.play(cards, history, p0, p1, strategy, player, action)
             node_actions_utilities[action.value] = node_action_utility
-            node_utility += node_utility_update
 
         for action in Actions:
-            regret = node_actions_utilities[action.value] - node_utility
+            regret = node_actions_utilities[action.value] - node_chosen_action_utility
             node.regret_sum[action.value] += (p1 if player == 0 else p0) * regret
 
-        return node_utility
+        return node_chosen_action_utility
 
 if __name__ == "__main__":
     iterations = 10000
