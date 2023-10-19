@@ -124,36 +124,36 @@ class KuhnTrainer:
 
             if terminal_pass:
                 if history == "pp":
-                    return 1 if is_player_card_higher else -1          #determina a recompensa
+                    return 1 if is_player_card_higher else -1
                 else:
                     return 1
             elif double_bet:
-                return 2 if is_player_card_higher else -2              #determina a recompensa
+                return 2 if is_player_card_higher else -2
 
-        info_set = str(cards[player]) + history                      #determina o infoset olhando a carta do jogador atual e o histórico
+        info_set = str(cards[player]) + history
         node = self.get_node(info_set)
 
-        strategy = node.get_strategy(p0 if player == 0 else p1)      #pega a estratégia do nodo, que é um vetor de probabilidades para cada ação.
-        node_actions_rewards = [0.0] * NUM_ACTIONS
-        node_reward_sum = 0
-
+        strategy = node.get_strategy(p0 if player == 0 else p1)
+        node_actions_utilities = [0.0] * NUM_ACTIONS
+        node_utility = 0
         # other_actions = list(Actions)  # Get a list of actions in the order of the enum
         # chosen_action = node.get_action(strategy)
         # other_actions.remove(Actions(chosen_action))  # Remove the first action from the list
 
-        for action in Actions:                                      #itera entre todas as acoes possiveis, calculando a utilidade esperada. Possivelmente eh aqui que implemente o MCCFR
+        for action in Actions:
+            # passar um parametro para mccfr dizendo que se é jogada alternativa, e de quê jogador, se for do jogador 1, ai não tem for na jogada do jogador 0
             next_history = history + ('p' if action == Actions.PASS else 'b')
             if player == 0:
-                node_actions_rewards[action.value] = -self.mccfr(cards, next_history, p0 * strategy[action.value], p1) #aqui implementa a recursao, percorrendo os nodos e calculando a utilidade esperada
+                node_actions_utilities[action.value] = -self.mccfr(cards, next_history, p0 * strategy[action.value], p1)
             else:
-                node_actions_rewards[action.value] = -self.mccfr(cards, next_history, p0, p1 * strategy[action.value])
-            node_reward_sum += strategy[action.value] * node_actions_rewards[action.value]
+                node_actions_utilities[action.value] = -self.mccfr(cards, next_history, p0, p1 * strategy[action.value])
+            node_utility += strategy[action.value] * node_actions_utilities[action.value]
 
         for action in Actions:
-            regret = node_actions_rewards[action.value] - node_reward_sum
+            regret = node_actions_utilities[action.value] - node_utility
             node.regret_sum[action.value] += (p1 if player == 0 else p0) * regret
 
-        return node_reward_sum
+        return node_utility
 
 if __name__ == "__main__":
     iterations = 10000
