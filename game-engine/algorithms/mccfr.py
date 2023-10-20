@@ -111,18 +111,21 @@ class KuhnTrainer:
         """Returns a node for the given information set. Creates the node if it doesn't exist."""
         return self.node_map.setdefault(info_set, self.Node(info_set))
 
-    def play(self, cards, history, p0, p1, strategy, player, action):
+    def play(self, cards, history, p0, p1, strategy, player, action, alternative_play=None):
         next_history = history + ('p' if action == Actions.PASS else 'b')
         node_action_utility = 0
+        # node_action_utility receives a negative values because we are alternating between players,
+        # and in the Kuhn Poker game, the reward for a player is the opposite of the other player's reward
         if player == 0:
-            node_action_utility = -self.mccfr(cards, next_history, p0 * strategy[action.value], p1)
+            node_action_utility = -self.mccfr(cards, next_history, p0 * strategy[action.value], p1, alternative_play)
         else:
-            node_action_utility = -self.mccfr(cards, next_history, p0, p1 * strategy[action.value])
+            node_action_utility = -self.mccfr(cards, next_history, p0, p1 * strategy[action.value], alternative_play)
 
         return node_action_utility
 
 
-    def mccfr(self, cards, history, p0, p1):
+    def mccfr(self, cards, history, p0, p1, alternative_play=None):
+        # On the first iteration, the history is empty, so the first player starts
         plays = len(history)
         player = plays % 2
         opponent = 1 - player
@@ -151,14 +154,15 @@ class KuhnTrainer:
         other_actions.remove(Actions(chosen_action))  # Remove the first action from the list
 
         # Play chosen action according to the strategy
-        node_chosen_action_utility = self.play(cards, history, p0, p1, strategy, player, chosen_action)
+        node_chosen_action_utility = self.play(cards, history, p0, p1, strategy, player, chosen_action, alternative_play)
         node_actions_utilities[chosen_action.value] = node_chosen_action_utility
 
         # Play for other actions
-        for action in other_actions:
-            # passar um parametro para mccfr dizendo que se é jogada alternativa, e de quê jogador, se for do jogador 1, ai não tem for na jogada do jogador 0
-            node_action_utility = self.play(cards, history, p0, p1, strategy, player, action)
-            node_actions_utilities[action.value] = node_action_utility
+        if alternative_play is None or alternative_play == player:
+            for action in other_actions:
+                # passar um parametro para mccfr dizendo que se é jogada alternativa, e de quê jogador, se for do jogador 1, ai não tem for na jogada do jogador 0
+                node_action_utility = self.play(cards, history, p0, p1, strategy, player, action, alternative_play=player)
+                node_actions_utilities[action.value] = node_action_utility
 
         for action in Actions:
             regret = node_actions_utilities[action.value] - node_chosen_action_utility
