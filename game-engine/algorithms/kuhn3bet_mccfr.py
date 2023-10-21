@@ -4,18 +4,21 @@ import logging
 from enum import Enum
 import os
 from functions import color_print
+
 random.seed(42)
+use_3bet = True
 
-# class Actions(Enum):
-#     PASS = 0
-#     BET1 = 1
-class Actions(Enum):
-    PASS = 0
-    BET2 = 1
-    BET1 = 2
-
-# action_symbol = ['p', 'b']
-action_symbol = ['p', 'B', 'b']
+if use_3bet:
+    class Actions(Enum):
+        PASS = 0
+        BET2 = 1
+        BET1 = 2
+    action_symbol = ['p', 'B', 'b']
+else:
+    class Actions(Enum):
+        PASS = 0
+        BET1 = 1
+    action_symbol = ['p','b']
 
 class KuhnTrainer:
     """
@@ -98,12 +101,15 @@ class KuhnTrainer:
             return avg_strategy
 
         def __str__(self):
+            min_width_info_set = f"{self.info_set:<10}"  # Ensuring minimum 10 characters for self.info_set
+            return f"{min_width_info_set}: {self.get_average_strategy()}"
+        
+        def color_print(self):
             avg_strategy = self.get_average_strategy()
             formatted_avg_strategy = ""
             for action_strategy in avg_strategy:
                 formatted_avg_strategy += color_print(action_strategy)
-            min_width_info_set = f"{self.info_set:<10}"  # Ensuring minimum 10 characters for self.info_set
-            return f"{min_width_info_set}: {formatted_avg_strategy}"
+            return formatted_avg_strategy
         
         def __lt__(self, other):
             return self.info_set < other.info_set
@@ -167,7 +173,7 @@ class KuhnTrainer:
             columns += f"{action} "
         print(f"Columns   : {columns}")
         for n in sorted(self.node_map.values()):
-            print(n)
+            print(n.color_print())
 
 
     def get_node(self, info_set, possible_actions=None):
@@ -228,7 +234,7 @@ class KuhnTrainer:
         return node_chosen_action_utility
 
 if __name__ == "__main__":
-    iterations = 10000
+    iterations = 1000
     trainer = KuhnTrainer()
     trainer.log('../analysis/logs/kuhn3bet_mccfr.log')
     trainer.train(iterations)

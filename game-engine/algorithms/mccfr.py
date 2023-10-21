@@ -3,6 +3,7 @@ import collections
 import logging
 from enum import Enum
 import os
+
 random.seed(42)
 class Actions(Enum):
     PASS = 0
@@ -171,7 +172,7 @@ class KuhnTrainer:
         return node_chosen_action_utility
 
 if __name__ == "__main__":
-    iterations = 10000
+    iterations = 1000
     trainer = KuhnTrainer()
     trainer.log('../analysis/logs/mccfr.log')
     trainer.train(iterations)

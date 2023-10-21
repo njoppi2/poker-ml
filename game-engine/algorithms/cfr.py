@@ -132,7 +132,7 @@ class KuhnTrainer:
         return nodeUtil
 
 if __name__ == "__main__":
-    iterations = 10000
+    iterations = 1000
     trainer = KuhnTrainer()
     trainer.log('../analysis/logs/cfr.log')
     trainer.train(iterations)
