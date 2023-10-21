@@ -3,6 +3,8 @@ import collections
 import logging
 from enum import Enum
 
+random.seed(42)
+
 class Actions(Enum):
     PASS = 0
     BET = 1
@@ -64,7 +66,7 @@ class KuhnTrainer:
 
 
     def train(self, iterations):
-        cards = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+        cards = [1, 2, 3]#, 4, 5, 6, 7, 8, 9]
         util = 0
         for i in range(iterations):
             random.shuffle(cards)
