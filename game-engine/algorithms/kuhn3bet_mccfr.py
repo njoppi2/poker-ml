@@ -4,6 +4,7 @@ import logging
 from enum import Enum
 import os
 from functions import color_print
+import time
 
 random.seed(42)
 use_3bet = True
@@ -109,7 +110,8 @@ class KuhnTrainer:
             formatted_avg_strategy = ""
             for action_strategy in avg_strategy:
                 formatted_avg_strategy += color_print(action_strategy)
-            return formatted_avg_strategy
+            min_width_info_set = f"{self.info_set:<10}"  # Ensuring minimum 10 characters for self.info_set
+            return f"{min_width_info_set}: {formatted_avg_strategy}"
         
         def __lt__(self, other):
             return self.info_set < other.info_set
@@ -153,6 +155,7 @@ class KuhnTrainer:
         p0 = 1
         p1 = 1
 
+        start_time = time.time()
         for i in range(iterations):
             random.shuffle(cards)
             sum_of_rewards += self.mccfr(cards, "", p0, p1)
@@ -165,8 +168,11 @@ class KuhnTrainer:
                 'avg_game_value': sum_of_rewards / (i + 1),
                 'result_dict': dict  # Assuming self.nodeMap contains the result dictionary
             }
-            self.logger.info('', extra=sample_iteration)
+
+            if i < 10:
+                self.logger.info('', extra=sample_iteration)
             
+        end_time = time.time()
         print(f"Average game value: {sum_of_rewards / iterations}")
         columns = ""
         for action in Actions:
@@ -174,6 +180,10 @@ class KuhnTrainer:
         print(f"Columns   : {columns}")
         for n in sorted(self.node_map.values()):
             print(n.color_print())
+
+        elapsed_time = end_time - start_time
+        print(f"mccfr took {elapsed_time} seconds to run.")
+
 
 
     def get_node(self, info_set, possible_actions=None):
