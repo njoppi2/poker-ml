@@ -4,6 +4,7 @@ import logging
 from enum import Enum
 import os
 from functions import color_print
+import time
 
 random.seed(42)
 use_3bet = True
@@ -87,7 +88,8 @@ class KuhnTrainer:
             formatted_avg_strategy = ""
             for action_strategy in avg_strategy:
                 formatted_avg_strategy += color_print(action_strategy)
-            return formatted_avg_strategy
+            min_width_info_set = f"{self.infoSet:<10}"  # Ensuring minimum 10 characters for self.info_set
+            return f"{min_width_info_set}: {formatted_avg_strategy}"
         
         def __lt__(self, other):
             return self.infoSet < other.infoSet
@@ -124,6 +126,8 @@ class KuhnTrainer:
     def train(self, iterations):
         cards = [1, 2, 3]#, 4, 5, 6, 7, 8, 9]
         util = 0
+
+        start_time = time.time()
         for i in range(iterations):
             random.shuffle(cards)
             util += self.cfr(cards, "", 1, 1)
@@ -136,11 +140,18 @@ class KuhnTrainer:
                 'avg_game_value': util / (i + 1),
                 'result_dict': dict  # Assuming self.nodeMap contains the result dictionary
             }
-            self.logger.info('', extra=sample_iteration)
-            
+
+            if i < 10:
+                self.logger.info('', extra=sample_iteration)
+
+        end_time = time.time()
         print(f"Average game value: {util / iterations}")
         for n in sorted(self.nodeMap.values()):
             print(n.color_print())
+
+        elapsed_time = end_time - start_time
+        print(f"cfr took {elapsed_time} seconds to run.")
+
 
     def get_node(self, info_set, possible_actions=Actions):
         """Returns a node for the given information set. Creates the node if it doesn't exist."""
