@@ -3,14 +3,30 @@ import collections
 import logging
 from enum import Enum
 import os
+from functions import color_print
 random.seed(42)
+
+# class Actions(Enum):
+#     PASS = 0
+#     BET1 = 1
 class Actions(Enum):
     PASS = 0
-    BET = 1
+    BET2 = 1
+    BET1 = 2
 
-NUM_ACTIONS = len(Actions)
+# action_symbol = ['p', 'b']
+action_symbol = ['p', 'B', 'b']
 
 class KuhnTrainer:
+    """
+       The AI's wil play a version of Kuhn Poker with 3 possible actions: pass, bet 1 and bet 2. 
+       Each player has 2 coins, if someone does BET2, they're all-in.
+       Possible final histories: 
+        pp, pbp, pbb, pbBp, pbBb, pBp, pBb, pBB,
+        bp,       bb,  bBp,  bBb,
+        Bp,                                 BB 
+    """
+    # How can we handle situations where not all actions are alowed?
 
     def __init__(self):
         self.node_map = {}
@@ -38,30 +54,33 @@ class KuhnTrainer:
 
     class Node:
         """ A node is an information set, which is the cards of the player and the history of the game."""
-        def __init__(self, info_set):
+        def __init__(self, info_set, actions=Actions):
+
+            self.actions = actions
+            self.num_actions = len(actions)
             self.info_set = info_set
             # The regret and strategies of a node refer to the last action taken to reach the node
-            self.regret_sum = [0.0] * NUM_ACTIONS
-            self.strategy = [0.0] * NUM_ACTIONS
-            self.strategy_sum = [0.0] * NUM_ACTIONS
+            self.regret_sum = [0.0] * self.num_actions
+            self.strategy = [0.0] * self.num_actions
+            self.strategy_sum = [0.0] * self.num_actions
 
         def get_strategy(self, realization_weight):
             """Turn sum of regrets into a probability distribution for actions."""
             normalizing_sum = sum(max(regret, 0) for regret in self.regret_sum)
-            for action in Actions:
+            for action in self.actions:
                 if normalizing_sum > 0:
                     self.strategy[action.value] = max(self.regret_sum[action.value], 0) / normalizing_sum
                 else:
-                    self.strategy[action.value] = 1.0 / NUM_ACTIONS
+                    self.strategy[action.value] = 1.0 / self.num_actions
                 self.strategy_sum[action.value] += realization_weight * self.strategy[action.value]
             return self.strategy
-
+        
         def get_action(self, strategy):
             """Returns an action based on the strategy."""
             r = random.random()
             cumulative_probability = 0
             
-            for action in Actions:
+            for action in self.actions:
                 cumulative_probability += strategy[action.value]
                 if r < cumulative_probability:
                     return action
@@ -69,28 +88,68 @@ class KuhnTrainer:
             raise Exception("No action taken for r: " + str(r) + " and cumulativeProbability: " + str(cumulative_probability) + " and strategy: " + str(strategy))
 
         def get_average_strategy(self):
-            avg_strategy = [0.0] * NUM_ACTIONS
+            avg_strategy = [0.0] * self.num_actions
             normalizing_sum = sum(self.strategy_sum)
-            for action in Actions:
+            for action in self.actions:
                 if normalizing_sum > 0:
                     avg_strategy[action.value] = self.strategy_sum[action.value] / normalizing_sum
                 else:
-                    avg_strategy[action.value] = 1.0 / NUM_ACTIONS
+                    avg_strategy[action.value] = 1.0 / self.num_actions
             return avg_strategy
 
         def __str__(self):
-            return f"{self.info_set}: {self.get_average_strategy()}"
+            avg_strategy = self.get_average_strategy()
+            formatted_avg_strategy = ""
+            for action_strategy in avg_strategy:
+                formatted_avg_strategy += color_print(action_strategy)
+            min_width_info_set = f"{self.info_set:<10}"  # Ensuring minimum 10 characters for self.info_set
+            return f"{min_width_info_set}: {formatted_avg_strategy}"
         
         def __lt__(self, other):
             return self.info_set < other.info_set
 
 
+    def get_possible_actions(self, history, cards, player, opponent):
+        """Returns the reward if it's a terminal node, or the possible actions if it's not."""
+        is_player_card_higher = cards[player] > cards[opponent]
+        
+        if len(history) == 0:
+            return Actions, None
+        elif len(history) == 1:
+            if history[-1] == 'B':
+                possible_actions = list(Actions)
+                possible_actions.remove(Actions(Actions.BET1))  # Remove the first action from the list
+                return possible_actions, None
+            else:
+                return Actions, None
+        elif len(history) >= 2:
+            if history[-2:] == "pp":
+                return None, 1 if is_player_card_higher else -1
+            elif history[-2:] == "bp" or history[-2:] == "Bp":
+                return None, 1
+            elif history[-2:] == "bb":
+                return None, 2 if is_player_card_higher else -2
+            elif history[-2:] == "BB" :
+                return None, 3 if is_player_card_higher else -3
+            elif history[-3:] == "bBb":
+                return None, 3 if is_player_card_higher else -3
+
+        return Actions, None
+        # raise Exception("Action or reward not found for history: " + history)
+        
+
     def train(self, iterations):
         cards = [1, 2, 3]#, 4, 5, 6, 7, 8, 9]
         sum_of_rewards = 0
+
+        # p0 and p1 store, respectively, the probability of the player 0 and player 1 reaching the current node,
+        # from its "parent" node
+        p0 = 1
+        p1 = 1
+
         for i in range(iterations):
             random.shuffle(cards)
-            sum_of_rewards += self.mccfr(cards, "", 1, 1)
+            sum_of_rewards += self.mccfr(cards, "", p0, p1)
             
             dict = ""
             for n in self.node_map.values():
@@ -103,16 +162,22 @@ class KuhnTrainer:
             self.logger.info('', extra=sample_iteration)
             
         print(f"Average game value: {sum_of_rewards / iterations}")
+        columns = ""
+        for action in Actions:
+            columns += f"{action} "
+        print(f"Columns   : {columns}")
         for n in sorted(self.node_map.values()):
             print(n)
 
 
-    def get_node(self, info_set):
+    def get_node(self, info_set, possible_actions=None):
         """Returns a node for the given information set. Creates the node if it doesn't exist."""
-        return self.node_map.setdefault(info_set, self.Node(info_set))
+        return self.node_map.setdefault(info_set, self.Node(info_set, possible_actions))
+
 
     def play(self, cards, history, p0, p1, strategy, player, action, alternative_play=None):
-        next_history = history + ('p' if action == Actions.PASS else 'b')
+        action_char = action_symbol[action.value]
+        next_history = history + action_char
         node_action_utility = 0
         # node_action_utility receives a negative values because we are alternating between players,
         # and in the Kuhn Poker game, the reward for a player is the opposite of the other player's reward
@@ -130,26 +195,18 @@ class KuhnTrainer:
         player = plays % 2
         opponent = 1 - player
 
-        if plays > 1:
-            terminal_pass = history[-1] == 'p'
-            double_bet = history[-2:] == 'bb'
-            is_player_card_higher = cards[player] > cards[opponent]
+        possible_actions, rewards = self.get_possible_actions(history, cards, player, opponent)
 
-            if terminal_pass:
-                if history == "pp":
-                    return 1 if is_player_card_higher else -1
-                else:
-                    return 1
-            elif double_bet:
-                return 2 if is_player_card_higher else -2
+        if possible_actions is None:
+            return rewards
 
         info_set = str(cards[player]) + history
-        node = self.get_node(info_set)
+        node = self.get_node(info_set, possible_actions)
 
         strategy = node.get_strategy(p0 if player == 0 else p1)
-        node_actions_utilities = [0.0] * NUM_ACTIONS
+        node_actions_utilities = [0.0] * len(possible_actions)
 
-        other_actions = list(Actions)  # Get a list of actions in the order of the enum
+        other_actions = list(possible_actions)  # Get a list of actions in the order of the enum
         chosen_action = node.get_action(strategy)
         other_actions.remove(Actions(chosen_action))  # Remove the first action from the list
 
@@ -164,7 +221,7 @@ class KuhnTrainer:
                 node_action_utility = self.play(cards, history, p0, p1, strategy, player, action, alternative_play=player)
                 node_actions_utilities[action.value] = node_action_utility
 
-        for action in Actions:
+        for action in possible_actions:
             regret = node_actions_utilities[action.value] - node_chosen_action_utility
             node.regret_sum[action.value] += (p1 if player == 0 else p0) * regret
 
@@ -173,5 +230,5 @@ class KuhnTrainer:
 if __name__ == "__main__":
     iterations = 10000
     trainer = KuhnTrainer()
-    trainer.log('../analysis/logs/mccfr.log')
+    trainer.log('../analysis/logs/kuhn3bet_mccfr.log')
     trainer.train(iterations)
