@@ -100,13 +100,6 @@ class KuhnTrainer:
         
         if len(history) == 0:
             return Actions, None
-        elif len(history) == 1:
-            if history[-1] == 'B':
-                possible_actions = list(Actions)
-                possible_actions.remove(Actions(Actions.BET1))  # Remove the first action from the list
-                return possible_actions, None
-            else:
-                return Actions, None
         elif len(history) >= 2:
             if history[-2:] == "pp":
                 return None, 1 if is_player_card_higher else -1
@@ -118,6 +111,13 @@ class KuhnTrainer:
                 return None, 3 if is_player_card_higher else -3
             elif history[-3:] == "bBb":
                 return None, 3 if is_player_card_higher else -3
+            
+        if history[-1] == 'B':
+            possible_actions = list(Actions)
+            possible_actions.remove(Actions(Actions.BET1))  # Remove the first action from the list
+            return possible_actions, None
+        else:
+            return Actions, None
 
         return Actions, None
         # raise Exception("Action or reward not found for history: " + history)
