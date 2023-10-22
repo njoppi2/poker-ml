@@ -3,11 +3,15 @@ import collections
 import logging
 from enum import Enum
 import os
-from functions import color_print
+from functions import color_print, create_file
 import time
+import json
+
+current_file_with_extension = os.path.basename(__file__)
+current_file_name = os.path.splitext(current_file_with_extension)[0]
 
 random.seed(42)
-use_3bet = True
+use_3bet = False
 
 if use_3bet:
     class Actions(Enum):
@@ -78,6 +82,14 @@ class KuhnTrainer:
                 else:
                     avgStrategy[action.value] = 1.0 / self.numActions
             return avgStrategy
+        
+        def to_dict(self):
+            return {
+                "info_set": self.infoSet,
+                "regretSum": self.regretSum,
+                "strategy": self.strategy,
+                "strategySum": self.strategySum
+            }
 
         def __str__(self):
             min_width_info_set = f"{self.infoSet:<10}"  # Ensuring minimum 10 characters for self.info_set
@@ -122,6 +134,14 @@ class KuhnTrainer:
         return Actions, None
         # raise Exception("Action or reward not found for history: " + history)
 
+    def print_average_strategy(self, sum_of_rewards, iterations):
+        print(f"Average game value: {sum_of_rewards / iterations}")
+        columns = ""
+        for action in Actions:
+            columns += f"{action} "
+        print(f"Columns   : {columns}")
+        for n in sorted(self.nodeMap.values()):
+            print(n.color_print())
 
     def train(self, iterations):
         cards = [1, 2, 3]#, 4, 5, 6, 7, 8, 9]
@@ -144,6 +164,10 @@ class KuhnTrainer:
             if i < 10:
                 self.logger.info('', extra=sample_iteration)
 
+            # if i % 1000 == 0:
+            #    self.print_average_strategy(util, iterations)
+
+        self.print_average_strategy(util, iterations)
         end_time = time.time()
         print(f"Average game value: {util / iterations}")
         for n in sorted(self.nodeMap.values()):
@@ -151,6 +175,12 @@ class KuhnTrainer:
 
         elapsed_time = end_time - start_time
         print(f"cfr took {elapsed_time} seconds to run.")
+
+        final_strategy_path = f'../analysis/blueprints/{current_file_name}_{"with3bet" if use_3bet else "2bet"}.json'
+        create_file(final_strategy_path)
+        with open(final_strategy_path, 'w') as file:
+            node_dict = {key: value.to_dict() for key, value in self.nodeMap.items()}
+            json.dump(node_dict, file, indent=4, sort_keys=True)
 
 
     def get_node(self, info_set, possible_actions=Actions):
@@ -193,5 +223,5 @@ class KuhnTrainer:
 if __name__ == "__main__":
     iterations = 1000
     trainer = KuhnTrainer()
-    trainer.log('../analysis/logs/kuhn3bet_cfr.log')
+    trainer.log(f'../analysis/logs/{current_file_name}.log')
     trainer.train(iterations)

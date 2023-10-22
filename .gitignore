@@ -24,5 +24,9 @@ yarn-error.log*
 frontend2
 
 game-engine/analysis/logs/**
+game-engine/analysis/blueprints/**
 
 **/__pycache__
+
+# other
+**/launch.json

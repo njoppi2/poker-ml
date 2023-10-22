@@ -3,11 +3,15 @@ import collections
 import logging
 from enum import Enum
 import os
-from functions import color_print
+from functions import color_print, create_file
 import time
+import json
+
+current_file_with_extension = os.path.basename(__file__)
+current_file_name = os.path.splitext(current_file_with_extension)[0]
 
 random.seed(42)
-use_3bet = True
+use_3bet = False
 
 if use_3bet:
     class Actions(Enum):
@@ -37,13 +41,7 @@ class KuhnTrainer:
         self.log_file = None
 
     def log(self, log_file):
-        log_dir = os.path.dirname(log_file)
-        if log_dir != '' and not os.path.exists(log_dir):
-            os.makedirs(log_dir)  # If the directory doesn't exist, create it
-
-        if not os.path.exists(log_file):
-            open(log_file, 'w').close()  # If it doesn't exist, create the file
-
+        create_file(log_file)
         self.log_file = log_file
         log_format = 'Iteration: %(index)s\nAverage game value: %(avg_game_value)s\n%(result_dict)s\n'
         formatter = logging.Formatter(log_format)
@@ -100,6 +98,14 @@ class KuhnTrainer:
                 else:
                     avg_strategy[action.value] = 1.0 / self.num_actions
             return avg_strategy
+        
+        def to_dict(self):
+            return {
+                "info_set": self.info_set,
+                "regretSum": self.regret_sum,
+                "strategy": self.strategy,
+                "strategySum": self.strategy_sum
+            }
 
         def __str__(self):
             min_width_info_set = f"{self.info_set:<10}"  # Ensuring minimum 10 characters for self.info_set
@@ -145,6 +151,14 @@ class KuhnTrainer:
         return Actions, None
         # raise Exception("Action or reward not found for history: " + history)
         
+    def print_average_strategy(self, sum_of_rewards, iterations):
+        print(f"Average game value: {sum_of_rewards / iterations}")
+        columns = ""
+        for action in Actions:
+            columns += f"{action} "
+        print(f"Columns   : {columns}")
+        for n in sorted(self.node_map.values()):
+            print(n.color_print())
 
     def train(self, iterations):
         cards = [1, 2, 3]#, 4, 5, 6, 7, 8, 9]
@@ -171,18 +185,20 @@ class KuhnTrainer:
 
             if i < 10:
                 self.logger.info('', extra=sample_iteration)
-            
-        end_time = time.time()
-        print(f"Average game value: {sum_of_rewards / iterations}")
-        columns = ""
-        for action in Actions:
-            columns += f"{action} "
-        print(f"Columns   : {columns}")
-        for n in sorted(self.node_map.values()):
-            print(n.color_print())
 
+            # if i % 1000 == 0:
+            #    self.print_average_strategy(sum_of_rewards, iterations)
+
+        self.print_average_strategy(sum_of_rewards, iterations)
+        end_time = time.time()
         elapsed_time = end_time - start_time
         print(f"mccfr took {elapsed_time} seconds to run.")
+
+        final_strategy_path = f'../analysis/blueprints/{current_file_name}_{"with3bet" if use_3bet else "2bet"}.json'
+        create_file(final_strategy_path)
+        with open(final_strategy_path, 'w') as file:
+            node_dict = {key: value.to_dict() for key, value in self.node_map.items()}
+            json.dump(node_dict, file, indent=4, sort_keys=True)
 
 
 
@@ -210,7 +226,7 @@ class KuhnTrainer:
         plays = len(history)
         player = plays % 2
         opponent = 1 - player
-        
+
         possible_actions, rewards = self.get_possible_actions(history, cards, player, opponent)
 
         if possible_actions is None:
@@ -246,5 +262,5 @@ class KuhnTrainer:
 if __name__ == "__main__":
     iterations = 1000
     trainer = KuhnTrainer()
-    trainer.log('../analysis/logs/kuhn3bet_mccfr.log')
+    trainer.log(f'../analysis/logs/{current_file_name}.log')
     trainer.train(iterations)

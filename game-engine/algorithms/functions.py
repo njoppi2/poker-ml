@@ -1,6 +1,8 @@
 
 import os
 import logging
+import inspect
+
 
 def color_print(value):
     r, g, b = (255, 255, 255)
@@ -11,8 +13,8 @@ def color_print(value):
             (255, 100, 0),   # 0.2
             (255, 150, 0),   # 0.3
             (255, 200, 0),   # 0.4
-            (100, 255, 0),   # 0.5
-            (0, 255, 0),   # 0.6
+            (150, 255, 0),   # 0.5
+            (10, 255, 0),   # 0.6
             (0, 255, 50),   # 0.7
             (0, 255, 150),   # 0.8
             (0, 255, 255),    # 0.9
@@ -24,3 +26,14 @@ def color_print(value):
 
     # ANSI escape sequence for color formatting
     return f"\033[38;2;{r};{g};{b}m{value:.10f}\033[0m "
+
+
+def create_file(log_file):
+    log_dir = os.path.dirname(log_file)
+    if log_dir != '' and not os.path.exists(log_dir):
+        os.makedirs(log_dir)  # If the directory doesn't exist, create it
+
+    if not os.path.exists(log_file):
+
+        open(log_file, 'w').close()  # If it doesn't exist, create the file
+
