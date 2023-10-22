@@ -11,7 +11,7 @@ current_file_with_extension = os.path.basename(__file__)
 current_file_name = os.path.splitext(current_file_with_extension)[0]
 
 random.seed(42)
-use_3bet = False
+use_3bet = True
 
 if use_3bet:
     class Actions(Enum):
@@ -28,7 +28,7 @@ else:
 class KuhnTrainer:
 
     def __init__(self):
-        self.nodeMap = {}
+        self.node_map = {}
         self.log_file = None
 
     def log(self, log_file):
@@ -55,56 +55,56 @@ class KuhnTrainer:
         def __init__(self, info_set, actions=Actions):
 
             self.actions = actions
-            self.numActions = len(actions)
-            self.infoSet = info_set
+            self.num_actions = len(actions)
+            self.info_set = info_set
             # The regret and strategies of a node refer to the last action taken to reach the node
-            self.regretSum = [0.0] * self.numActions
-            self.strategy = [0.0] * self.numActions
-            self.strategySum = [0.0] * self.numActions
+            self.regret_sum = [0.0] * self.num_actions
+            self.strategy = [0.0] * self.num_actions
+            self.strategy_sum = [0.0] * self.num_actions
 
-        def getStrategy(self, realizationWeight):
+        def get_strategy(self, realization_weight):
             """Turn sum of regrets into a probability distribution for actions."""
-            normalizingSum = sum(max(regret, 0) for regret in self.regretSum)
+            normalizing_sum = sum(max(regret, 0) for regret in self.regret_sum)
             for action in self.actions:
-                if normalizingSum > 0:
-                    self.strategy[action.value] = max(self.regretSum[action.value], 0) / normalizingSum
+                if normalizing_sum > 0:
+                    self.strategy[action.value] = max(self.regret_sum[action.value], 0) / normalizing_sum
                 else:
-                    self.strategy[action.value] = 1.0 / self.numActions
-                self.strategySum[action.value] += realizationWeight * self.strategy[action.value]
+                    self.strategy[action.value] = 1.0 / self.num_actions
+                self.strategy_sum[action.value] += realization_weight * self.strategy[action.value]
             return self.strategy
 
-        def getAverageStrategy(self):
-            avgStrategy = [0.0] * self.numActions
-            normalizingSum = sum(self.strategySum)
+        def get_average_strategy(self):
+            avg_strategy = [0.0] * self.num_actions
+            normalizing_sum = sum(self.strategy_sum)
             for action in self.actions:
-                if normalizingSum > 0:
-                    avgStrategy[action.value] = self.strategySum[action.value] / normalizingSum
+                if normalizing_sum > 0:
+                    avg_strategy[action.value] = self.strategy_sum[action.value] / normalizing_sum
                 else:
-                    avgStrategy[action.value] = 1.0 / self.numActions
-            return avgStrategy
+                    avg_strategy[action.value] = 1.0 / self.num_actions
+            return avg_strategy
         
         def to_dict(self):
             return {
-                "info_set": self.infoSet,
-                "regretSum": self.regretSum,
+                "info_set": self.info_set,
+                "regret_sum": self.regret_sum,
                 "strategy": self.strategy,
-                "strategySum": self.strategySum
+                "strategy_sum": self.strategy_sum
             }
 
         def __str__(self):
-            min_width_info_set = f"{self.infoSet:<10}"  # Ensuring minimum 10 characters for self.info_set
-            return f"{min_width_info_set}: {self.getAverageStrategy()}"
+            min_width_info_set = f"{self.info_set:<10}"  # Ensuring minimum 10 characters for self.info_set
+            return f"{min_width_info_set}: {self.get_average_strategy()}"
         
         def color_print(self):
-            avg_strategy = self.getAverageStrategy()
+            avg_strategy = self.get_average_strategy()
             formatted_avg_strategy = ""
             for action_strategy in avg_strategy:
                 formatted_avg_strategy += color_print(action_strategy)
-            min_width_info_set = f"{self.infoSet:<10}"  # Ensuring minimum 10 characters for self.info_set
+            min_width_info_set = f"{self.info_set:<10}"  # Ensuring minimum 10 characters for self.info_set
             return f"{min_width_info_set}: {formatted_avg_strategy}"
         
         def __lt__(self, other):
-            return self.infoSet < other.infoSet
+            return self.info_set < other.info_set
 
     def get_possible_actions(self, history, cards, player, opponent):
         """Returns the reward if it's a terminal node, or the possible actions if it's not."""
@@ -140,7 +140,7 @@ class KuhnTrainer:
         for action in Actions:
             columns += f"{action} "
         print(f"Columns   : {columns}")
-        for n in sorted(self.nodeMap.values()):
+        for n in sorted(self.node_map.values()):
             print(n.color_print())
 
     def train(self, iterations):
@@ -152,13 +152,13 @@ class KuhnTrainer:
             random.shuffle(cards)
             util += self.cfr(cards, "", 1, 1)
             
-            dict = ""
-            for n in self.nodeMap.values():
-                dict += str(n) + "\n"
+            dict_str = ""
+            for n in self.node_map.values():
+                dict_str += str(n) + "\n"
             sample_iteration = {
                 'index': i,
                 'avg_game_value': util / (i + 1),
-                'result_dict': dict  # Assuming self.nodeMap contains the result dictionary
+                'result_dict': dict_str  # Assuming self.node_map contains the result dictionary
             }
 
             if i < 10:
@@ -170,7 +170,7 @@ class KuhnTrainer:
         self.print_average_strategy(util, iterations)
         end_time = time.time()
         print(f"Average game value: {util / iterations}")
-        for n in sorted(self.nodeMap.values()):
+        for n in sorted(self.node_map.values()):
             print(n.color_print())
 
         elapsed_time = end_time - start_time
@@ -179,13 +179,13 @@ class KuhnTrainer:
         final_strategy_path = f'../analysis/blueprints/{current_file_name}_{"with3bet" if use_3bet else "2bet"}.json'
         create_file(final_strategy_path)
         with open(final_strategy_path, 'w') as file:
-            node_dict = {key: value.to_dict() for key, value in self.nodeMap.items()}
+            node_dict = {key: value.to_dict() for key, value in self.node_map.items()}
             json.dump(node_dict, file, indent=4, sort_keys=True)
 
 
     def get_node(self, info_set, possible_actions=Actions):
         """Returns a node for the given information set. Creates the node if it doesn't exist."""
-        return self.nodeMap.setdefault(info_set, self.Node(info_set, possible_actions))
+        return self.node_map.setdefault(info_set, self.Node(info_set, possible_actions))
 
 
     def cfr(self, cards, history, p0, p1):
@@ -201,24 +201,24 @@ class KuhnTrainer:
         info_set = str(cards[player]) + history
         node = self.get_node(info_set, possible_actions)
 
-        strategy = node.getStrategy(p0 if player == 0 else p1)
+        strategy = node.get_strategy(p0 if player == 0 else p1)
         node_actions_utilities = [0.0] * len(possible_actions)
-        nodeUtil = 0
-
-        for action in possible_actions:                                      #itera entre todas as acoes possiveis, calculando a utilidade esperada. Possivelmente eh aqui que implemente o MCCFR
-            action_char = action_symbol[action.value]
-            nextHistory = history + action_char
-            if player == 0:
-                node_actions_utilities[action.value] = -self.cfr(cards, nextHistory, p0 * strategy[action.value], p1) #aqui implementa a recursao, percorrendo os nodos e calculando a utilidade esperada
-            else:
-                node_actions_utilities[action.value] = -self.cfr(cards, nextHistory, p0, p1 * strategy[action.value])
-            nodeUtil += strategy[action.value] * node_actions_utilities[action.value]
+        node_util = 0
 
         for action in possible_actions:
-            regret = node_actions_utilities[action.value] - nodeUtil
-            node.regretSum[action.value] += (p1 if player == 0 else p0) * regret
+            action_char = action_symbol[action.value]
+            next_history = history + action_char
+            if player == 0:
+                node_actions_utilities[action.value] = -self.cfr(cards, next_history, p0 * strategy[action.value], p1) #aqui implementa a recursao, percorrendo os nodos e calculando a utilidade esperada
+            else:
+                node_actions_utilities[action.value] = -self.cfr(cards, next_history, p0, p1 * strategy[action.value])
+            node_util += strategy[action.value] * node_actions_utilities[action.value]
 
-        return nodeUtil
+        for action in possible_actions:
+            regret = node_actions_utilities[action.value] - node_util
+            node.regret_sum[action.value] += (p1 if player == 0 else p0) * regret
+
+        return node_util
 
 if __name__ == "__main__":
     iterations = 1000
