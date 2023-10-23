@@ -7,10 +7,11 @@ from functions import color_print, create_file
 import time
 import json
 
+random.seed(42)
+
 current_file_with_extension = os.path.basename(__file__)
 current_file_name = os.path.splitext(current_file_with_extension)[0]
-
-random.seed(42)
+iterations = 1000
 use_3bet = True
 
 if use_3bet:
@@ -203,7 +204,7 @@ class KuhnTrainer:
         return self.node_map.setdefault(info_set, self.Node(info_set, possible_actions))
 
 
-    def play(self, cards, history, p0, p1, strategy, player, action, alternative_play=None):
+    def play_mccfr(self, cards, history, p0, p1, strategy, player, action, alternative_play=None):
         action_char = action_symbol[action.value]
         next_history = history + action_char
         node_action_utility = 0
@@ -239,14 +240,14 @@ class KuhnTrainer:
         other_actions.remove(Actions(chosen_action))  # Remove the first action from the list
 
         # Play chosen action according to the strategy
-        node_chosen_action_utility = self.play(cards, history, p0, p1, strategy, player, chosen_action, alternative_play)
+        node_chosen_action_utility = self.play_mccfr(cards, history, p0, p1, strategy, player, chosen_action, alternative_play)
         node_actions_utilities[chosen_action.value] = node_chosen_action_utility
 
         # Play for other actions
         if alternative_play is None or alternative_play == player:
             for action in other_actions:
                 # passar um parametro para mccfr dizendo que se é jogada alternativa, e de quê jogador, se for do jogador 1, ai não tem for na jogada do jogador 0
-                node_action_utility = self.play(cards, history, p0, p1, strategy, player, action, alternative_play=player)
+                node_action_utility = self.play_mccfr(cards, history, p0, p1, strategy, player, action, alternative_play=player)
                 node_actions_utilities[action.value] = node_action_utility
 
         for action in possible_actions:
@@ -256,7 +257,6 @@ class KuhnTrainer:
         return node_chosen_action_utility
 
 if __name__ == "__main__":
-    iterations = 100000
     trainer = KuhnTrainer()
     trainer.log(f'../analysis/logs/{current_file_name}.log')
     trainer.train(iterations)

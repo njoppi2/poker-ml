@@ -5,6 +5,8 @@ from enum import Enum
 
 random.seed(42)
 
+iterations = 1000
+
 class Actions(Enum):
     PASS = 0
     BET = 1
@@ -132,7 +134,6 @@ class KuhnTrainer:
         return node_util
 
 if __name__ == "__main__":
-    iterations = 1000
     trainer = KuhnTrainer()
     trainer.log('../analysis/logs/cfr.log')
     trainer.train(iterations)
