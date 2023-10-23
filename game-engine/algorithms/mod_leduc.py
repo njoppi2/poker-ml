@@ -9,6 +9,7 @@ import json
 import multiprocessing
 
 
+
 random.seed(42)
 
 num_processes = multiprocessing.cpu_count()
@@ -19,30 +20,36 @@ current_file_name = os.path.splitext(current_file_with_extension)[0]
 iterations = 1000
 use_3bet = True
 algorithm = 'cfr'
-cards = [1, 2, 3]#, 4, 5, 6, 7, 8, 9]
+cards = [1, 1, 2, 2, 3, 3]
 exploring_phase = 0.0
 
 
 if use_3bet:
     class Actions(Enum):
         PASS = 0
-        BET2 = 1
-        BET1 = 2
-    action_symbol = ['p', 'B', 'b']
+        BET4 = 1
+        BET3 = 2
+        BET2 = 3
+        BET1 = 4
+    action_symbol = ['p', '4', '3', '2', '1']
 else:
     class Actions(Enum):
         PASS = 0
         BET1 = 1
     action_symbol = ['p','b']
 
-class KuhnTrainer:
+class ModLeducTrainer:
     """
-       The AI's wil play a version of Kuhn Poker with 3 possible actions: pass, bet 1 and bet 2. 
-       Each player has 2 coins, if someone does BET2, they're all-in.
-       Possible final histories: 
-        pp, pbp, pbb, pbBp, pbBb, pBp, pBb, pBB,
-        bp,       bb,  bBp,  bBb,
-        Bp,                                 BB 
+       The AI's wil play a version of Leduc Poker with 5 possible actions: pass, bet 1, bet 2, bet 3, and bet 4. 
+       Each player has 4 coins, if someone does BET4, they're all-in.
+       There are 2 rounds, and at the beggining of the second round, a public card is revealed.
+       Possible final histories for the round 1: 
+        2+0 pot: pp
+        2+1 pot: p1p, 1p
+        2+2 pot: p11, p2p, 2p
+        2+3 pot: p12p, p3p, 12p, 3p
+        2+4 pot: p121, p13p, p22, p4p, 121, 13p, 22, 4p
+        # 2+5 pot: p122p, p14p, p131, p23p, p5p, 122p, 14p, 131, 23p, 5p
     """
     # How can we handle situations where not all actions are alowed?
 
@@ -221,7 +228,7 @@ class KuhnTrainer:
         next_history = history + action_char
         node_action_utility = 0
         # node_action_utility receives a negative values because we are alternating between players,
-        # and in the Kuhn Poker game, the reward for a player is the opposite of the other player's reward
+        # and in the Leduc Poker game, the reward for a player is the opposite of the other player's reward
         if player == 0:
             node_action_utility = -self.mccfr(cards, next_history, p0 * strategy[action.value], p1, is_exploring_phase, alternative_play)
         else:
@@ -313,6 +320,6 @@ class KuhnTrainer:
 
 
 if __name__ == "__main__":
-    trainer = KuhnTrainer()
+    trainer = ModLeducTrainer()
     trainer.log(f'../analysis/logs/{current_file_name}_{algorithm}.log')
     trainer.train(iterations)
