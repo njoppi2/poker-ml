@@ -7,10 +7,12 @@ from functions import color_print, create_file
 import time
 import json
 
+random.seed(42)
+
 current_file_with_extension = os.path.basename(__file__)
 current_file_name = os.path.splitext(current_file_with_extension)[0]
+iterations = 100000
 
-random.seed(42)
 use_3bet = True
 
 if use_3bet:
@@ -39,15 +41,14 @@ class KuhnTrainer:
     def __init__(self):
         self.node_map_pA = {}
         self.node_map_pB = {}
-        self.log_file = None
-        self.file_nameA = 'kuhn3bet_mccfr'
-        self.file_nameB = 'kuhn3bet_cfr'
+        self.jsonA = 'kuhn-3bet-mccfr-3cards-EP0_001'
+        self.jsonB = 'kuhn-3bet-mccfr-3cards-EP0_0'
         self.create_nodes_from_json()
 
     def create_nodes_from_json(self):
         current_directory = os.path.dirname(os.path.abspath(__file__))
-        blueprints_directory_pA = os.path.join(current_directory, f'../blueprints/{self.file_nameA}_{"with3bet" if use_3bet else "2bet"}.json')
-        blueprints_directory_pB = os.path.join(current_directory, f'../blueprints/{self.file_nameB}_{"with3bet" if use_3bet else "2bet"}.json')
+        blueprints_directory_pA = os.path.join(current_directory, f'../blueprints/{self.jsonA}.json')
+        blueprints_directory_pB = os.path.join(current_directory, f'../blueprints/{self.jsonB}.json')
 
         with open(blueprints_directory_pA, 'r') as f:
             dict_map_pA = json.load(f)
@@ -172,7 +173,7 @@ class KuhnTrainer:
 
         for p in ["A", "B"]:
             sum_of_rewards = 0
-            player_name = self.file_nameA if p == 'A' else self.file_nameB
+            player_name = self.jsonA if p == 'A' else self.jsonB
             print("Player " + player_name + " is starting.")
             for i in range(iterations):
                 random.shuffle(cards)
@@ -189,8 +190,8 @@ class KuhnTrainer:
             'B': avg_game_value['B'] - avg_game_value['A']
         }
 
-        print(f"\nFinal average game value for {self.file_nameA}: {final_avg_game_value['A']}")
-        print(f"Final average game value for {self.file_nameB}: {final_avg_game_value['B']}")
+        print(f"\nFinal average game value for {self.jsonA}: {final_avg_game_value['A']}")
+        print(f"Final average game value for {self.jsonB}: {final_avg_game_value['B']}")
 
     def get_node(self, info_set, possible_actions=None, player=None, starting_player=None):
         """Returns a node for the given information set. Creates the node if it doesn't exist."""
@@ -241,7 +242,5 @@ class KuhnTrainer:
         return node_chosen_action_utility
 
 if __name__ == "__main__":
-    iterations = 10000
     trainer = KuhnTrainer()
-    trainer.log(f'../analysis/logs/{current_file_name}.log')
     trainer.train(iterations)
