@@ -37,3 +37,6 @@ def create_file(log_file):
 
         open(log_file, 'w').close()  # If it doesn't exist, create the file
 
+def float_to_custom_string(num):
+    str_num = str(num).replace('.', '_')  # Replacing decimal point with underscore
+    return str_num

@@ -3,18 +3,24 @@ import collections
 import logging
 from enum import Enum
 import os
-from functions import color_print, create_file
+from functions import color_print, create_file, float_to_custom_string
 import time
 import json
+import multiprocessing
+
 
 random.seed(42)
 
+num_processes = multiprocessing.cpu_count()
+pool = multiprocessing.Pool(processes=num_processes)  # Create a Pool of worker processes
 current_file_with_extension = os.path.basename(__file__)
 current_file_name = os.path.splitext(current_file_with_extension)[0]
+
 iterations = 1000
 use_3bet = True
 algorithm = 'cfr'
 cards = [1, 2, 3]#, 4, 5, 6, 7, 8, 9]
+exploring_phase = 0.0
 
 
 if use_3bet:
@@ -157,6 +163,8 @@ class KuhnTrainer:
             print(n.color_print())
 
     def train(self, iterations):
+        print(f"Parameters: {iterations} iterations, {len(cards)} cards, {algorithm}, {exploring_phase} exploring phase, {use_3bet} 3bet\n")
+
         sum_of_rewards = 0
 
         # p0 and p1 store, respectively, the probability of the player 0 and player 1 reaching the current node,
@@ -169,7 +177,8 @@ class KuhnTrainer:
         start_time = time.time()
         for i in range(iterations):
             random.shuffle(cards)
-            sum_of_rewards += algorithm_function(cards, "", p0, p1)
+            is_exploring_phase = i < exploring_phase * iterations
+            sum_of_rewards += algorithm_function(cards, "", p0, p1, is_exploring_phase)
             
             dict_str = ""
             for n in self.node_map.values():
@@ -190,8 +199,8 @@ class KuhnTrainer:
         end_time = time.time()
         elapsed_time = end_time - start_time
         print(f"{algorithm} took {elapsed_time} seconds to run.")
-
-        final_strategy_path = f'../analysis/blueprints/{current_file_name}_{algorithm}_{"with3bet" if use_3bet else "2bet"}.json'
+        json_name = f'{"3bet" if use_3bet else "2bet"}-{algorithm}-{len(cards)}cards-EP{float_to_custom_string(exploring_phase)}.json'
+        final_strategy_path = f'../analysis/blueprints/kuhn-{json_name}'
         create_file(final_strategy_path)
 
         node_dict = {}
@@ -207,21 +216,28 @@ class KuhnTrainer:
         return self.node_map.setdefault(info_set, self.Node(info_set, possible_actions))
 
 
-    def play_mccfr(self, cards, history, p0, p1, strategy, player, action, alternative_play=None):
+    def play_mccfr(self, cards, history, p0, p1, strategy, player, action, is_exploring_phase, alternative_play=None):
         action_char = action_symbol[action.value]
         next_history = history + action_char
         node_action_utility = 0
         # node_action_utility receives a negative values because we are alternating between players,
         # and in the Kuhn Poker game, the reward for a player is the opposite of the other player's reward
         if player == 0:
-            node_action_utility = -self.mccfr(cards, next_history, p0 * strategy[action.value], p1, alternative_play)
+            node_action_utility = -self.mccfr(cards, next_history, p0 * strategy[action.value], p1, is_exploring_phase, alternative_play)
         else:
-            node_action_utility = -self.mccfr(cards, next_history, p0, p1 * strategy[action.value], alternative_play)
+            node_action_utility = -self.mccfr(cards, next_history, p0, p1 * strategy[action.value], is_exploring_phase, alternative_play)
 
         return node_action_utility
 
+    def play_cfr(self, cards, history, p0, p1, strategy, player, action, is_exploring_phase):
+        action_char = action_symbol[action.value]
+        next_history = history + action_char
+        if player == 0:
+            return -self.cfr(cards, next_history, p0 * strategy[action.value], p1, is_exploring_phase)
+        else:
+            return -self.cfr(cards, next_history, p0, p1 * strategy[action.value], is_exploring_phase)
 
-    def mccfr(self, cards, history, p0, p1, alternative_play=None):
+    def mccfr(self, cards, history, p0, p1, is_exploring_phase, alternative_play=None):
         # On the first iteration, the history is empty, so the first player starts
         plays = len(history)
         player = plays % 2
@@ -235,7 +251,10 @@ class KuhnTrainer:
         info_set = str(cards[player]) + history
         node = self.get_node(info_set, possible_actions)
 
-        strategy = node.get_strategy(p0 if player == 0 else p1)
+        if is_exploring_phase:
+            strategy = [1.0 / len(possible_actions)] * len(possible_actions)
+        else:
+            strategy = node.get_strategy(p0 if player == 0 else p1) 
         node_actions_utilities = [0.0] * len(possible_actions)
 
         other_actions = list(possible_actions)  # Get a list of actions in the order of the enum
@@ -243,14 +262,14 @@ class KuhnTrainer:
         other_actions.remove(Actions(chosen_action))  # Remove the first action from the list
 
         # Play chosen action according to the strategy
-        node_chosen_action_utility = self.play_mccfr(cards, history, p0, p1, strategy, player, chosen_action, alternative_play)
+        node_chosen_action_utility = self.play_mccfr(cards, history, p0, p1, strategy, player, chosen_action, is_exploring_phase, alternative_play)
         node_actions_utilities[chosen_action.value] = node_chosen_action_utility
 
         # Play for other actions
         if alternative_play is None or alternative_play == player:
             for action in other_actions:
                 # passar um parametro para mccfr dizendo que se é jogada alternativa, e de quê jogador, se for do jogador 1, ai não tem for na jogada do jogador 0
-                node_action_utility = self.play_mccfr(cards, history, p0, p1, strategy, player, action, alternative_play=player)
+                node_action_utility = self.play_mccfr(cards, history, p0, p1, strategy, player, action, is_exploring_phase, alternative_play=player)
                 node_actions_utilities[action.value] = node_action_utility
 
         for action in possible_actions:
@@ -260,7 +279,7 @@ class KuhnTrainer:
         return node_chosen_action_utility
     
 
-    def cfr(self, cards, history, p0, p1):
+    def cfr(self, cards, history, p0, p1, is_exploring_phase):
         plays = len(history)
         player = plays % 2
         opponent = 1 - player
@@ -273,18 +292,18 @@ class KuhnTrainer:
         info_set = str(cards[player]) + history
         node = self.get_node(info_set, possible_actions)
 
-        strategy = node.get_strategy(p0 if player == 0 else p1)
+        if is_exploring_phase:
+            strategy = [1.0 / len(possible_actions)] * len(possible_actions)
+        else:
+            strategy = node.get_strategy(p0 if player == 0 else p1) 
+
         node_actions_utilities = [0.0] * len(possible_actions)
         node_util = 0
 
         for action in possible_actions:
-            action_char = action_symbol[action.value]
-            next_history = history + action_char
-            if player == 0:
-                node_actions_utilities[action.value] = -self.cfr(cards, next_history, p0 * strategy[action.value], p1) #aqui implementa a recursao, percorrendo os nodos e calculando a utilidade esperada
-            else:
-                node_actions_utilities[action.value] = -self.cfr(cards, next_history, p0, p1 * strategy[action.value])
-            node_util += strategy[action.value] * node_actions_utilities[action.value]
+            node_action_utility = self.play_cfr(cards, history, p0, p1, strategy, player, action, is_exploring_phase)
+            node_actions_utilities[action.value] = node_action_utility
+            node_util += strategy[action.value] * node_action_utility
 
         for action in possible_actions:
             regret = node_actions_utilities[action.value] - node_util
@@ -295,5 +314,5 @@ class KuhnTrainer:
 
 if __name__ == "__main__":
     trainer = KuhnTrainer()
-    trainer.log(f'../analysis/logs/{current_file_name}.log')
+    trainer.log(f'../analysis/logs/{current_file_name}_{algorithm}.log')
     trainer.train(iterations)
