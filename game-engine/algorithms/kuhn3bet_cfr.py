@@ -7,10 +7,11 @@ from functions import color_print, create_file
 import time
 import json
 
+random.seed(42)
+
 current_file_with_extension = os.path.basename(__file__)
 current_file_name = os.path.splitext(current_file_with_extension)[0]
-
-random.seed(42)
+iterations = 1000
 use_3bet = True
 
 if use_3bet:
@@ -26,19 +27,22 @@ else:
     action_symbol = ['p','b']
 
 class KuhnTrainer:
+    """
+       The AI's wil play a version of Kuhn Poker with 3 possible actions: pass, bet 1 and bet 2. 
+       Each player has 2 coins, if someone does BET2, they're all-in.
+       Possible final histories: 
+        pp, pbp, pbb, pbBp, pbBb, pBp, pBb, pBB,
+        bp,       bb,  bBp,  bBb,
+        Bp,                                 BB 
+    """
+    # How can we handle situations where not all actions are alowed?
 
     def __init__(self):
         self.node_map = {}
         self.log_file = None
 
     def log(self, log_file):
-        log_dir = os.path.dirname(log_file)
-        if log_dir != '' and not os.path.exists(log_dir):
-            os.makedirs(log_dir)  # If the directory doesn't exist, create it
-
-        if not os.path.exists(log_file):
-            open(log_file, 'w').close()  # If it doesn't exist, create the file
-
+        create_file(log_file)
         self.log_file = log_file
         log_format = 'Iteration: %(index)s\nAverage game value: %(avg_game_value)s\n%(result_dict)s\n'
         formatter = logging.Formatter(log_format)
@@ -50,8 +54,9 @@ class KuhnTrainer:
             self.logger = logging.getLogger('')
             self.logger.setLevel(logging.DEBUG)
             self.logger.addHandler(file_handler)
-    
+
     class Node:
+        """ A node is an information set, which is the cards of the player and the history of the game."""
         def __init__(self, info_set, actions=Actions):
 
             self.actions = actions
@@ -98,6 +103,7 @@ class KuhnTrainer:
         def __lt__(self, other):
             return self.info_set < other.info_set
 
+
     def get_possible_actions(self, history, cards, player, opponent):
         """Returns the reward if it's a terminal node, or the possible actions if it's not."""
         is_player_card_higher = cards[player] > cards[opponent]
@@ -137,19 +143,24 @@ class KuhnTrainer:
 
     def train(self, iterations):
         cards = [1, 2, 3]#, 4, 5, 6, 7, 8, 9]
-        util = 0
+        sum_of_rewards = 0
+
+        # p0 and p1 store, respectively, the probability of the player 0 and player 1 reaching the current node,
+        # from its "parent" node
+        p0 = 1
+        p1 = 1
 
         start_time = time.time()
         for i in range(iterations):
             random.shuffle(cards)
-            util += self.cfr(cards, "", 1, 1)
+            sum_of_rewards += self.cfr(cards, "", p0, p1)
             
             dict_str = ""
             for n in self.node_map.values():
                 dict_str += str(n) + "\n"
             sample_iteration = {
                 'index': i,
-                'avg_game_value': util / (i + 1),
+                'avg_game_value': sum_of_rewards / (i + 1),
                 'result_dict': dict_str  # Assuming self.node_map contains the result dictionary
             }
 
@@ -157,14 +168,10 @@ class KuhnTrainer:
                 self.logger.info('', extra=sample_iteration)
 
             # if i % 1000 == 0:
-            #    self.print_average_strategy(util, iterations)
+            #    self.print_average_strategy(sum_of_rewards, iterations)
 
-        self.print_average_strategy(util, iterations)
+        self.print_average_strategy(sum_of_rewards, iterations)
         end_time = time.time()
-        print(f"Average game value: {util / iterations}")
-        for n in sorted(self.node_map.values()):
-            print(n.color_print())
-
         elapsed_time = end_time - start_time
         print(f"cfr took {elapsed_time} seconds to run.")
 
@@ -178,8 +185,7 @@ class KuhnTrainer:
         with open(final_strategy_path, 'w') as file:
             json.dump(node_dict, file, indent=4, sort_keys=True)
 
-
-    def get_node(self, info_set, possible_actions=Actions):
+    def get_node(self, info_set, possible_actions=None):
         """Returns a node for the given information set. Creates the node if it doesn't exist."""
         return self.node_map.setdefault(info_set, self.Node(info_set, possible_actions))
 
@@ -217,7 +223,6 @@ class KuhnTrainer:
         return node_util
 
 if __name__ == "__main__":
-    iterations = 100000
     trainer = KuhnTrainer()
     trainer.log(f'../analysis/logs/{current_file_name}.log')
     trainer.train(iterations)
