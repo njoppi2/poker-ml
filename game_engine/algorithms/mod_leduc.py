@@ -7,6 +7,7 @@ from functions import color_print, create_file, float_to_custom_string
 import time
 import json
 import multiprocessing
+from game_engine.player import Player
 
 
 
@@ -49,7 +50,13 @@ class ModLeducTrainer:
         2+2 pot: p11, p2p, 2p
         2+3 pot: p12p, p3p, 12p, 3p
         2+4 pot: p121, p13p, p22, p4p, 121, 13p, 22, 4p
-        # 2+5 pot: p122p, p14p, p131, p23p, p5p, 122p, 14p, 131, 23p, 5p
+        2+5 pot: p122p, p14p, p23p, p5p, 122p, 14p, 23p, 5p
+        2+6 pot: p1221, p123p, p132, p15p, p231, p24p, p33, p6p, 1221, 123p, 132, 15p, 231, 24p, 33, 6p
+        2+7 pot: p1222p, p124p, p133p, p141, p16p, ....
+        2+8 pot: ......
+
+        p122K111
+        flop: K
     """
     # How can we handle situations where not all actions are alowed?
 
@@ -149,7 +156,7 @@ class ModLeducTrainer:
                 return None, 3 if is_player_card_higher else -3
             elif history[-3:] == "bBb":
                 return None, 3 if is_player_card_higher else -3
-            
+        
         if history[-1] == 'B':
             possible_actions = list(Actions)
             possible_actions.remove(Actions(Actions.BET1))  # Remove the first action from the list
