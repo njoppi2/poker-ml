@@ -98,14 +98,6 @@ class KuhnTrainer:
                 else:
                     avg_strategy[action.value] = 1.0 / self.num_actions
             return avg_strategy
-        
-        def to_dict(self):
-            return {
-                "info_set": self.info_set,
-                "regretSum": self.regret_sum,
-                "strategy": self.strategy,
-                "strategySum": self.strategy_sum
-            }
 
         def __str__(self):
             min_width_info_set = f"{self.info_set:<10}"  # Ensuring minimum 10 characters for self.info_set
@@ -196,8 +188,12 @@ class KuhnTrainer:
 
         final_strategy_path = f'../analysis/blueprints/{current_file_name}_{"with3bet" if use_3bet else "2bet"}.json'
         create_file(final_strategy_path)
+
+        node_dict = {}
+        for n in sorted(self.node_map.values()):
+            node_dict[n.info_set] = n.get_average_strategy()
+
         with open(final_strategy_path, 'w') as file:
-            node_dict = {key: value.to_dict() for key, value in self.node_map.items()}
             json.dump(node_dict, file, indent=4, sort_keys=True)
 
 
@@ -260,7 +256,7 @@ class KuhnTrainer:
         return node_chosen_action_utility
 
 if __name__ == "__main__":
-    iterations = 1000
+    iterations = 100000
     trainer = KuhnTrainer()
     trainer.log(f'../analysis/logs/{current_file_name}.log')
     trainer.train(iterations)
