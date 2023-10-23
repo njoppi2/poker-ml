@@ -7,11 +7,15 @@ from functions import color_print, create_file
 import time
 import json
 
+random.seed(42)
+
 current_file_with_extension = os.path.basename(__file__)
 current_file_name = os.path.splitext(current_file_with_extension)[0]
-
-random.seed(42)
+iterations = 1000
 use_3bet = True
+algorithm = 'cfr'
+cards = [1, 2, 3]#, 4, 5, 6, 7, 8, 9]
+
 
 if use_3bet:
     class Actions(Enum):
@@ -153,7 +157,6 @@ class KuhnTrainer:
             print(n.color_print())
 
     def train(self, iterations):
-        cards = [1, 2, 3]#, 4, 5, 6, 7, 8, 9]
         sum_of_rewards = 0
 
         # p0 and p1 store, respectively, the probability of the player 0 and player 1 reaching the current node,
@@ -161,10 +164,12 @@ class KuhnTrainer:
         p0 = 1
         p1 = 1
 
+        algorithm_function = self.cfr if algorithm == 'cfr' else self.mccfr
+
         start_time = time.time()
         for i in range(iterations):
             random.shuffle(cards)
-            sum_of_rewards += self.mccfr(cards, "", p0, p1)
+            sum_of_rewards += algorithm_function(cards, "", p0, p1)
             
             dict_str = ""
             for n in self.node_map.values():
@@ -184,9 +189,9 @@ class KuhnTrainer:
         self.print_average_strategy(sum_of_rewards, iterations)
         end_time = time.time()
         elapsed_time = end_time - start_time
-        print(f"mccfr took {elapsed_time} seconds to run.")
+        print(f"{algorithm} took {elapsed_time} seconds to run.")
 
-        final_strategy_path = f'../analysis/blueprints/{current_file_name}_{"with3bet" if use_3bet else "2bet"}.json'
+        final_strategy_path = f'../analysis/blueprints/{current_file_name}_{algorithm}_{"with3bet" if use_3bet else "2bet"}.json'
         create_file(final_strategy_path)
 
         node_dict = {}
@@ -197,13 +202,12 @@ class KuhnTrainer:
             json.dump(node_dict, file, indent=4, sort_keys=True)
 
 
-
     def get_node(self, info_set, possible_actions=None):
         """Returns a node for the given information set. Creates the node if it doesn't exist."""
         return self.node_map.setdefault(info_set, self.Node(info_set, possible_actions))
 
 
-    def play(self, cards, history, p0, p1, strategy, player, action, alternative_play=None):
+    def play_mccfr(self, cards, history, p0, p1, strategy, player, action, alternative_play=None):
         action_char = action_symbol[action.value]
         next_history = history + action_char
         node_action_utility = 0
@@ -239,14 +243,14 @@ class KuhnTrainer:
         other_actions.remove(Actions(chosen_action))  # Remove the first action from the list
 
         # Play chosen action according to the strategy
-        node_chosen_action_utility = self.play(cards, history, p0, p1, strategy, player, chosen_action, alternative_play)
+        node_chosen_action_utility = self.play_mccfr(cards, history, p0, p1, strategy, player, chosen_action, alternative_play)
         node_actions_utilities[chosen_action.value] = node_chosen_action_utility
 
         # Play for other actions
         if alternative_play is None or alternative_play == player:
             for action in other_actions:
                 # passar um parametro para mccfr dizendo que se é jogada alternativa, e de quê jogador, se for do jogador 1, ai não tem for na jogada do jogador 0
-                node_action_utility = self.play(cards, history, p0, p1, strategy, player, action, alternative_play=player)
+                node_action_utility = self.play_mccfr(cards, history, p0, p1, strategy, player, action, alternative_play=player)
                 node_actions_utilities[action.value] = node_action_utility
 
         for action in possible_actions:
@@ -254,9 +258,42 @@ class KuhnTrainer:
             node.regret_sum[action.value] += (p1 if player == 0 else p0) * regret
 
         return node_chosen_action_utility
+    
+
+    def cfr(self, cards, history, p0, p1):
+        plays = len(history)
+        player = plays % 2
+        opponent = 1 - player
+
+        possible_actions, rewards = self.get_possible_actions(history, cards, player, opponent)
+
+        if possible_actions is None:
+            return rewards
+
+        info_set = str(cards[player]) + history
+        node = self.get_node(info_set, possible_actions)
+
+        strategy = node.get_strategy(p0 if player == 0 else p1)
+        node_actions_utilities = [0.0] * len(possible_actions)
+        node_util = 0
+
+        for action in possible_actions:
+            action_char = action_symbol[action.value]
+            next_history = history + action_char
+            if player == 0:
+                node_actions_utilities[action.value] = -self.cfr(cards, next_history, p0 * strategy[action.value], p1) #aqui implementa a recursao, percorrendo os nodos e calculando a utilidade esperada
+            else:
+                node_actions_utilities[action.value] = -self.cfr(cards, next_history, p0, p1 * strategy[action.value])
+            node_util += strategy[action.value] * node_actions_utilities[action.value]
+
+        for action in possible_actions:
+            regret = node_actions_utilities[action.value] - node_util
+            node.regret_sum[action.value] += (p1 if player == 0 else p0) * regret
+
+        return node_util
+
 
 if __name__ == "__main__":
-    iterations = 100000
     trainer = KuhnTrainer()
     trainer.log(f'../analysis/logs/{current_file_name}.log')
     trainer.train(iterations)
