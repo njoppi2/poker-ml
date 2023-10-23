@@ -37,8 +37,29 @@ class KuhnTrainer:
     # How can we handle situations where not all actions are alowed?
 
     def __init__(self):
-        self.node_map = {}
+        self.node_map_pA = {}
+        self.node_map_pB = {}
         self.log_file = None
+        self.file_nameA = 'kuhn3bet_mccfr'
+        self.file_nameB = 'kuhn3bet_cfr'
+        self.create_nodes_from_json()
+
+    def create_nodes_from_json(self):
+        current_directory = os.path.dirname(os.path.abspath(__file__))
+        blueprints_directory_pA = os.path.join(current_directory, f'../blueprints/{self.file_nameA}_{"with3bet" if use_3bet else "2bet"}.json')
+        blueprints_directory_pB = os.path.join(current_directory, f'../blueprints/{self.file_nameB}_{"with3bet" if use_3bet else "2bet"}.json')
+
+        with open(blueprints_directory_pA, 'r') as f:
+            dict_map_pA = json.load(f)
+
+        with open(blueprints_directory_pB, 'r') as f:
+            dict_map_pB = json.load(f)
+
+        for key, value in dict_map_pA.items():
+            self.node_map_pA[key] = self.Node(key, value)
+
+        for key, value in dict_map_pB.items():
+            self.node_map_pB[key] = self.Node(key, value)
 
     def log(self, log_file):
         create_file(log_file)
@@ -56,25 +77,24 @@ class KuhnTrainer:
 
     class Node:
         """ A node is an information set, which is the cards of the player and the history of the game."""
-        def __init__(self, info_set, actions=Actions):
+        def __init__(self, info_set, node_blueprint):
 
-            self.actions = actions
-            self.num_actions = len(actions)
+            self.num_actions = len(node_blueprint)
+            if self.num_actions > 0:  # Ensure that there are elements to remove
+                self.actions = list(Actions)[:self.num_actions]
+            else:
+                raise Exception("Invalid number of actions for node: " + info_set)
+
+            if self.num_actions != len(self.actions):
+                raise Exception("Invalid number of actions for node: " + info_set)
             self.info_set = info_set
             # The regret and strategies of a node refer to the last action taken to reach the node
             self.regret_sum = [0.0] * self.num_actions
-            self.strategy = [0.0] * self.num_actions
+            self.strategy = node_blueprint
             self.strategy_sum = [0.0] * self.num_actions
 
-        def get_strategy(self, realization_weight):
+        def get_strategy(self, player):
             """Turn sum of regrets into a probability distribution for actions."""
-            normalizing_sum = sum(max(regret, 0) for regret in self.regret_sum)
-            for action in self.actions:
-                if normalizing_sum > 0:
-                    self.strategy[action.value] = max(self.regret_sum[action.value], 0) / normalizing_sum
-                else:
-                    self.strategy[action.value] = 1.0 / self.num_actions
-                self.strategy_sum[action.value] += realization_weight * self.strategy[action.value]
             return self.strategy
         
         def get_action(self, strategy):
@@ -98,27 +118,11 @@ class KuhnTrainer:
                 else:
                     avg_strategy[action.value] = 1.0 / self.num_actions
             return avg_strategy
-        
-        def to_dict(self):
-            return {
-                "info_set": self.info_set,
-                "regretSum": self.regret_sum,
-                "strategy": self.strategy,
-                "strategySum": self.strategy_sum
-            }
-
+    
         def __str__(self):
             min_width_info_set = f"{self.info_set:<10}"  # Ensuring minimum 10 characters for self.info_set
             return f"{min_width_info_set}: {self.get_average_strategy()}"
-        
-        def color_print(self):
-            avg_strategy = self.get_average_strategy()
-            formatted_avg_strategy = ""
-            for action_strategy in avg_strategy:
-                formatted_avg_strategy += color_print(action_strategy)
-            min_width_info_set = f"{self.info_set:<10}"  # Ensuring minimum 10 characters for self.info_set
-            return f"{min_width_info_set}: {formatted_avg_strategy}"
-        
+                
         def __lt__(self, other):
             return self.info_set < other.info_set
 
@@ -151,14 +155,6 @@ class KuhnTrainer:
         return Actions, None
         # raise Exception("Action or reward not found for history: " + history)
         
-    def print_average_strategy(self, sum_of_rewards, iterations):
-        print(f"Average game value: {sum_of_rewards / iterations}")
-        columns = ""
-        for action in Actions:
-            columns += f"{action} "
-        print(f"Columns   : {columns}")
-        for n in sorted(self.node_map.values()):
-            print(n.color_print())
 
     def train(self, iterations):
         cards = [1, 2, 3]#, 4, 5, 6, 7, 8, 9]
@@ -169,59 +165,57 @@ class KuhnTrainer:
         p0 = 1
         p1 = 1
 
-        start_time = time.time()
-        for i in range(iterations):
-            random.shuffle(cards)
-            sum_of_rewards += self.mccfr(cards, "", p0, p1)
+        avg_game_value = {
+            'A': 0,
+            'B': 0
+        }
+
+        for p in ["A", "B"]:
+            sum_of_rewards = 0
+            player_name = self.file_nameA if p == 'A' else self.file_nameB
+            print("Player " + player_name + " is starting.")
+            for i in range(iterations):
+                random.shuffle(cards)
+                sum_of_rewards += self.simulate_play(cards, "", p)
+
+                # if i % 1000 == 0:
+                #    self.print_average_strategy(sum_of_rewards, iterations)
+
+            avg_game_value[p] = sum_of_rewards / iterations
+            print(f"Average game value for p0: {avg_game_value[p]}")
             
-            dict_str = ""
-            for n in self.node_map.values():
-                dict_str += str(n) + "\n"
-            sample_iteration = {
-                'index': i,
-                'avg_game_value': sum_of_rewards / (i + 1),
-                'result_dict': dict_str  # Assuming self.node_map contains the result dictionary
-            }
+        final_avg_game_value = {
+            'A': avg_game_value['A'] - avg_game_value['B'],
+            'B': avg_game_value['B'] - avg_game_value['A']
+        }
 
-            if i < 10:
-                self.logger.info('', extra=sample_iteration)
+        print(f"\nFinal average game value for {self.file_nameA}: {final_avg_game_value['A']}")
+        print(f"Final average game value for {self.file_nameB}: {final_avg_game_value['B']}")
 
-            # if i % 1000 == 0:
-            #    self.print_average_strategy(sum_of_rewards, iterations)
-
-        self.print_average_strategy(sum_of_rewards, iterations)
-        end_time = time.time()
-        elapsed_time = end_time - start_time
-        print(f"mccfr took {elapsed_time} seconds to run.")
-
-        final_strategy_path = f'../analysis/blueprints/{current_file_name}_{"with3bet" if use_3bet else "2bet"}.json'
-        create_file(final_strategy_path)
-        with open(final_strategy_path, 'w') as file:
-            node_dict = {key: value.to_dict() for key, value in self.node_map.items()}
-            json.dump(node_dict, file, indent=4, sort_keys=True)
-
-
-
-    def get_node(self, info_set, possible_actions=None):
+    def get_node(self, info_set, possible_actions=None, player=None, starting_player=None):
         """Returns a node for the given information set. Creates the node if it doesn't exist."""
-        return self.node_map.setdefault(info_set, self.Node(info_set, possible_actions))
+
+        first_player_node = self.node_map_pA if starting_player == 'A' else self.node_map_pB
+        second_player_node = self.node_map_pB if starting_player == 'A' else self.node_map_pA
+        
+        if player == 0:
+            return first_player_node[info_set]
+        else:
+            return second_player_node[info_set]
 
 
-    def play(self, cards, history, p0, p1, strategy, player, action, alternative_play=None):
+    def play(self, cards, history, action, starting_player=None):
         action_char = action_symbol[action.value]
         next_history = history + action_char
         node_action_utility = 0
         # node_action_utility receives a negative values because we are alternating between players,
         # and in the Kuhn Poker game, the reward for a player is the opposite of the other player's reward
-        if player == 0:
-            node_action_utility = -self.mccfr(cards, next_history, p0 * strategy[action.value], p1, alternative_play)
-        else:
-            node_action_utility = -self.mccfr(cards, next_history, p0, p1 * strategy[action.value], alternative_play)
+        node_action_utility = -self.simulate_play(cards, next_history, starting_player)
 
         return node_action_utility
 
 
-    def mccfr(self, cards, history, p0, p1, alternative_play=None):
+    def simulate_play(self, cards, history, starting_player=None):
         # On the first iteration, the history is empty, so the first player starts
         plays = len(history)
         player = plays % 2
@@ -233,34 +227,21 @@ class KuhnTrainer:
             return rewards
 
         info_set = str(cards[player]) + history
-        node = self.get_node(info_set, possible_actions)
+        node = self.get_node(info_set, possible_actions, player, starting_player)
 
-        strategy = node.get_strategy(p0 if player == 0 else p1)
-        node_actions_utilities = [0.0] * len(possible_actions)
+        strategy = node.get_strategy(player)
 
         other_actions = list(possible_actions)  # Get a list of actions in the order of the enum
         chosen_action = node.get_action(strategy)
         other_actions.remove(Actions(chosen_action))  # Remove the first action from the list
 
         # Play chosen action according to the strategy
-        node_chosen_action_utility = self.play(cards, history, p0, p1, strategy, player, chosen_action, alternative_play)
-        node_actions_utilities[chosen_action.value] = node_chosen_action_utility
-
-        # Play for other actions
-        if alternative_play is None or alternative_play == player:
-            for action in other_actions:
-                # passar um parametro para mccfr dizendo que se é jogada alternativa, e de quê jogador, se for do jogador 1, ai não tem for na jogada do jogador 0
-                node_action_utility = self.play(cards, history, p0, p1, strategy, player, action, alternative_play=player)
-                node_actions_utilities[action.value] = node_action_utility
-
-        for action in possible_actions:
-            regret = node_actions_utilities[action.value] - node_chosen_action_utility
-            node.regret_sum[action.value] += (p1 if player == 0 else p0) * regret
+        node_chosen_action_utility = self.play(cards, history, chosen_action, starting_player)
 
         return node_chosen_action_utility
 
 if __name__ == "__main__":
-    iterations = 1000
+    iterations = 10000
     trainer = KuhnTrainer()
     trainer.log(f'../analysis/logs/{current_file_name}.log')
     trainer.train(iterations)
