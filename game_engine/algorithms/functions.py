@@ -43,12 +43,15 @@ def float_to_custom_string(num):
     return str_num
 
 class Card(Enum):
-    A = 3
-    K = 2
     Q = 1
+    K = 2
+    A = 3
 
     def __str__(self):
         return self.name
+    
+    def __lt__(self, other):
+        return self.value < other.value
 
 class Player:
     def __init__(self, player_id: int):

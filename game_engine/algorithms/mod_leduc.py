@@ -10,7 +10,7 @@ import multiprocessing
 
 random.seed(42)
 
-CHIPS, TURN_BET_VALUE, PHASE_BET_VALUE, ROUND_BET_VALUE, PLAYED_CURRENT_PHASE = range(5)
+CHIPS, TURN_BET_VALUE, ROUND_BET_VALUE, PLAYED_CURRENT_PHASE = range(4)
 num_processes = multiprocessing.cpu_count()
 pool = multiprocessing.Pool(processes=num_processes)  # Create a Pool of worker processes
 current_file_with_extension = os.path.basename(__file__)
@@ -19,8 +19,8 @@ current_file_name = os.path.splitext(current_file_with_extension)[0]
 iterations = 1000
 use_3bet = True
 algorithm = 'mccfr'
-# cards = [Card.A, Card.A, Card.K, Card.K, Card.Q, Card.Q]
-cards = [1, 2, 3]
+cards = [Card.Q, Card.Q, Card.K, Card.K, Card.A, Card.A]
+# cards = [1, 1, 2, 2, 3, 3]
 exploring_phase = 0.0
 
 
@@ -65,7 +65,6 @@ class ModLeducTrainer:
     def __init__(self):
         self.node_map = {}
         self.log_file = None
-        # self.phase = 'preflop'
 
     def log(self, log_file):
         create_file(log_file)
@@ -133,8 +132,12 @@ class ModLeducTrainer:
         def color_print(self):
             avg_strategy = self.get_average_strategy()
             formatted_avg_strategy = ""
-            for action_strategy in avg_strategy:
-                formatted_avg_strategy += color_print(action_strategy)
+            last_action_index = 0
+            for i in range(self.num_actions):
+                for _ in range(self.actions[i].value - last_action_index):
+                    formatted_avg_strategy += " "*13
+                formatted_avg_strategy += color_print(avg_strategy[i])
+                last_action_index += 1
             min_width_info_set = f"{self.info_set:<10}"  # Ensuring minimum 10 characters for self.info_set
             return f"{min_width_info_set}: {formatted_avg_strategy}"
         
@@ -142,48 +145,55 @@ class ModLeducTrainer:
             return self.info_set < other.info_set
 
 
-    def get_possible_actions(self, history, cards, player, opponent, players):
+    def get_possible_actions(self, history, cards, player, opponent, players, phase):
         """Returns the reward if it's a terminal node, or the possible actions if it's not."""
         def filter_actions(bet, my_chips):
             return [action for action in Actions if action.value == 0 or (action.value >= bet and action.value <= my_chips)]
         
         def half(value):
             return value // 2
-        is_player_card_higher = cards[player] > cards[opponent]
-        min_bet_to_continue = players[opponent][PHASE_BET_VALUE] - players[player][PHASE_BET_VALUE]
+        min_bet_to_continue = players[opponent][ROUND_BET_VALUE] - players[player][ROUND_BET_VALUE]
         
-
+        def result_multiplier():
+            if cards[player] == cards[2]:
+                return 1
+            elif cards[opponent] == cards[2]:
+                return -1
+            elif cards[player] > cards[opponent]:
+                return 1
+            elif cards[player] < cards[opponent]:
+                return -1
+            else:
+                # cards[player] == cards[opponent]
+                return 0
+            
         if min_bet_to_continue < 0:
             # The opponent folded
             my_bet_total = players[player][ROUND_BET_VALUE]
             opponent_bet_total = players[opponent][ROUND_BET_VALUE]
             total_bet = my_bet_total + opponent_bet_total + min_bet_to_continue
-            return None, half(total_bet)
+            return None, half(total_bet), False
         
         if not players[player][PLAYED_CURRENT_PHASE] and min_bet_to_continue == 0:
             possible_actions = filter_actions(0, players[player][CHIPS])
-            return possible_actions, None
+            return possible_actions, None, False
         
         if players[player][PLAYED_CURRENT_PHASE] and min_bet_to_continue == 0:
-            if False and self.phase == 'preflop':
-                self.phase = 'flop'
+            if phase == 'preflop':
+                possible_actions = filter_actions(min_bet_to_continue, players[player][CHIPS])
                 assert players[player][ROUND_BET_VALUE] == players[opponent][ROUND_BET_VALUE]
+                return possible_actions, None, True
             else:
                 # Showdown
                 my_bet_total = players[player][ROUND_BET_VALUE]
                 opponent_bet_total = players[opponent][ROUND_BET_VALUE]
                 total_bet = my_bet_total + opponent_bet_total
                 assert my_bet_total == opponent_bet_total
-                # if cards[player] == cards[2]:
-                #     return None, half(total_bet)
-                # elif cards[opponent] == cards[2]:
-                #     return None, half(-total_bet)
-                # else:
-                return None, half(total_bet if is_player_card_higher else -total_bet)
+                return None, half(total_bet * result_multiplier()), False
             
         if min_bet_to_continue > 0:
             possible_actions = filter_actions(min_bet_to_continue, players[player][CHIPS])
-            return possible_actions, None
+            return possible_actions, None, False
         
         raise Exception("Action or reward not found for history: " + history)
         
@@ -207,7 +217,6 @@ class ModLeducTrainer:
         p1 = 1
         chips = 2
         turn_bet_value = 1
-        phase_bet_value = 1
         round_bet_value = 1
         played_current_phase = False
         algorithm_function = self.cfr if algorithm == 'cfr' else self.mccfr
@@ -215,10 +224,10 @@ class ModLeducTrainer:
         start_time = time.time()
         for i in range(iterations):
             random.shuffle(cards)
-            initial_player = (chips, turn_bet_value, phase_bet_value, round_bet_value, played_current_phase)
+            initial_player = (chips, turn_bet_value, round_bet_value, played_current_phase)
             players = (initial_player, initial_player)
             is_exploring_phase = i < exploring_phase * iterations
-            sum_of_rewards += algorithm_function(cards, "", p0, p1, players, is_exploring_phase)
+            sum_of_rewards += algorithm_function(cards, "", p0, p1, players, 'preflop',is_exploring_phase)
             
             dict_str = ""
             for n in self.node_map.values():
@@ -260,7 +269,6 @@ class ModLeducTrainer:
         current_player = list(players[player])
         current_player[CHIPS] -= action.value
         current_player[TURN_BET_VALUE] = action.value
-        current_player[PHASE_BET_VALUE] += action.value
         current_player[ROUND_BET_VALUE] += action.value
         current_player[PLAYED_CURRENT_PHASE] = True
         assert current_player[CHIPS] >= 0
@@ -268,38 +276,40 @@ class ModLeducTrainer:
         new_players[player] = tuple(current_player)
         return tuple(new_players)
 
-    def play_mccfr(self, cards, history, p0, p1, players, strategy, player, action, action_index, is_exploring_phase, alternative_play=None):
+    def play_mccfr(self, cards, history, p0, p1, players, phase, strategy, player, action, action_index, is_exploring_phase, alternative_play=None):
         action_char = action_symbol[action.value]
         next_history = history + action_char
         node_action_utility = 0
         # node_action_utility receives a negative values because we are alternating between players,
         # and in the Leduc Poker game, the reward for a player is the opposite of the other player's reward
         if player == 0:
-            node_action_utility = -self.mccfr(cards, next_history, p0 * strategy[action_index], p1, players, is_exploring_phase, alternative_play)
+            node_action_utility = -self.mccfr(cards, next_history, p0 * strategy[action_index], p1, players, phase, is_exploring_phase, alternative_play)
         else:
-            node_action_utility = -self.mccfr(cards, next_history, p0, p1 * strategy[action_index], players, is_exploring_phase, alternative_play)
+            node_action_utility = -self.mccfr(cards, next_history, p0, p1 * strategy[action_index], players, phase, is_exploring_phase, alternative_play)
 
         return node_action_utility
 
-    def play_cfr(self, cards, history, p0, p1, players, strategy, player, action, action_index, is_exploring_phase):
+    def play_cfr(self, cards, history, p0, p1, players, phase, strategy, player, action, action_index, is_exploring_phase):
         action_char = action_symbol[action.value]
         next_history = history + action_char
         if player == 0:
-            return -self.cfr(cards, next_history, p0 * strategy[action_index], p1, players, is_exploring_phase)
+            return -self.cfr(cards, next_history, p0 * strategy[action_index], p1, players, phase, is_exploring_phase)
         else:
-            return -self.cfr(cards, next_history, p0, p1 * strategy[action_index], players, is_exploring_phase)
+            return -self.cfr(cards, next_history, p0, p1 * strategy[action_index], players, phase, is_exploring_phase)
 
-    def mccfr(self, cards, history, p0, p1, players, is_exploring_phase, alternative_play=None):
+    def mccfr(self, cards, history, p0, p1, players, phase, is_exploring_phase, alternative_play=None):
         # On the first iteration, the history is empty, so the first player starts
         plays = len(history)
         player = plays % 2
         opponent = 1 - player
-        possible_actions, rewards = self.get_possible_actions(history, cards, player, opponent, players)
+        possible_actions, rewards, next_phase = self.get_possible_actions(history, cards, player, opponent, players, phase)
+        updated_phase = 'flop' if next_phase else phase
 
         if possible_actions is None:
             return rewards
 
-        info_set = str(cards[player]) + history
+        public_card = cards[2] if phase == 'flop' else ""
+        info_set = str(cards[player]) + str(public_card) + history
         node = self.get_node(info_set, possible_actions)
 
         if is_exploring_phase:
@@ -316,7 +326,7 @@ class ModLeducTrainer:
         updated_players = self.set_bet_value(player, players, chosen_action)
 
         # Play chosen action according to the strategy
-        node_chosen_action_utility = self.play_mccfr(cards, history, p0, p1, updated_players, strategy, player, chosen_action, action_index, is_exploring_phase, alternative_play)
+        node_chosen_action_utility = self.play_mccfr(cards, history, p0, p1, updated_players, updated_phase, strategy, player, chosen_action, action_index, is_exploring_phase, alternative_play)
         node_actions_utilities[action_index] = node_chosen_action_utility
 
         # Play for other actions
@@ -325,9 +335,11 @@ class ModLeducTrainer:
                 action_index = node.actions.index(action)
                 # passar um parametro para mccfr dizendo que se é jogada alternativa, e de quê jogador, se for do jogador 1, ai não tem for na jogada do jogador 0
                 updated_players = self.set_bet_value(player, players, action)
-                node_action_utility = self.play_mccfr(cards, history, p0, p1, updated_players, strategy, player, action, action_index, is_exploring_phase, alternative_play=player)
+                node_action_utility = self.play_mccfr(cards, history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase, alternative_play=player)
                 node_actions_utilities[action_index] = node_action_utility
 
+            # if len(info_set) > 1 and info_set[0] == info_set[1]:
+            #     print('j')
             for action in possible_actions:
                 action_index = node.actions.index(action)
                 regret = node_actions_utilities[action_index] - node_chosen_action_utility
@@ -336,17 +348,19 @@ class ModLeducTrainer:
         return node_chosen_action_utility
     
 
-    def cfr(self, cards, history, p0, p1, players, is_exploring_phase):
+    def cfr(self, cards, history, p0, p1, players, phase, is_exploring_phase):
         plays = len(history)
         player = plays % 2
         opponent = 1 - player
 
-        possible_actions, rewards = self.get_possible_actions(history, cards, player, opponent, players)
+        possible_actions, rewards, next_phase = self.get_possible_actions(history, cards, player, opponent, players, phase)
+        updated_phase = 'flop' if next_phase else phase
 
         if possible_actions is None:
             return rewards
 
-        info_set = str(cards[player]) + history
+        public_card = cards[2] if phase == 'flop' else ""
+        info_set = str(cards[player]) + str(public_card) + history
         node = self.get_node(info_set, possible_actions)
 
         if is_exploring_phase:
@@ -360,7 +374,7 @@ class ModLeducTrainer:
         for action in possible_actions:
             action_index = node.actions.index(action)
             updated_players = self.set_bet_value(player, players, action)
-            node_action_utility = self.play_cfr(cards, history, p0, p1, updated_players, strategy, player, action, action_index, is_exploring_phase)
+            node_action_utility = self.play_cfr(cards, history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase)
             node_actions_utilities[action_index] = node_action_utility
             node_util += strategy[action_index] * node_action_utility
 
