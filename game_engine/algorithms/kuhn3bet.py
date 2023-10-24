@@ -16,9 +16,9 @@ pool = multiprocessing.Pool(processes=num_processes)  # Create a Pool of worker 
 current_file_with_extension = os.path.basename(__file__)
 current_file_name = os.path.splitext(current_file_with_extension)[0]
 
-iterations = 10000
+iterations = 1000
 use_3bet = True
-algorithm = 'cfr'
+algorithm = 'mccfr'
 cards = [1, 2, 3]#, 4, 5, 6, 7, 8, 9]
 exploring_phase = 0.0
 
@@ -206,7 +206,7 @@ class KuhnTrainer:
         elapsed_time = end_time - start_time
         print(f"{algorithm} took {elapsed_time} seconds to run.")
         json_name = f'{"3bet" if use_3bet else "2bet"}-{algorithm}-{len(cards)}cards-EP{float_to_custom_string(exploring_phase)}.json'
-        final_strategy_path = f'../analysis/blueprints/kuhn-{json_name}'
+        final_strategy_path = f'../analysis/blueprints/kuhntest-{json_name}'
         create_file(final_strategy_path)
 
         node_dict = {}
