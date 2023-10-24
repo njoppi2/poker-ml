@@ -145,9 +145,9 @@ class KuhnTrainer:
             elif history[-3:] == "bBb":
                 return None, 3 if is_player_card_higher else -3
         if history[-2:] == 'bB':
-            possible_actions1 = list(Actions)
-            possible_actions1.remove(Actions(Actions.BET2))  # Remove the first action from the list
-            return possible_actions1, None
+            possible_actions = list(Actions)
+            possible_actions.remove(Actions(Actions.BET2))  # Remove the first action from the list
+            return possible_actions, None
 
         if history[-1] == 'B':
             possible_actions = list(Actions)
@@ -206,7 +206,7 @@ class KuhnTrainer:
         elapsed_time = end_time - start_time
         print(f"{algorithm} took {elapsed_time} seconds to run.")
         json_name = f'{"3bet" if use_3bet else "2bet"}-{algorithm}-{len(cards)}cards-EP{float_to_custom_string(exploring_phase)}.json'
-        final_strategy_path = f'../analysis/blueprints/kuhntest-{json_name}'
+        final_strategy_path = f'../analysis/blueprints/kuhn-{json_name}'
         create_file(final_strategy_path)
 
         node_dict = {}

@@ -3,14 +3,14 @@ import collections
 import logging
 from enum import Enum
 import os
-from functions import color_print, create_file, float_to_custom_string
+from functions import color_print, create_file, float_to_custom_string, Card, Player
 import time
 import json
 import multiprocessing
 
-
 random.seed(42)
 
+CHIPS, TURN_BET_VALUE, PHASE_BET_VALUE, ROUND_BET_VALUE, PLAYED_CURRENT_PHASE = range(5)
 num_processes = multiprocessing.cpu_count()
 pool = multiprocessing.Pool(processes=num_processes)  # Create a Pool of worker processes
 current_file_with_extension = os.path.basename(__file__)
@@ -19,11 +19,20 @@ current_file_name = os.path.splitext(current_file_with_extension)[0]
 iterations = 1000
 use_3bet = True
 algorithm = 'mccfr'
-cards = [1, 2, 3]#, 4, 5, 6, 7, 8, 9]
+# cards = [Card.A, Card.A, Card.K, Card.K, Card.Q, Card.Q]
+cards = [1, 2, 3]
 exploring_phase = 0.0
 
 
 if use_3bet:
+    # class Actions(Enum):
+    #     PASS = 0
+    #     BET4 = 1
+    #     BET3 = 2
+    #     BET2 = 3
+    #     BET1 = 4
+    # action_symbol = ['p', '4', '3', '2', '1']
+
     class Actions(Enum):
         PASS = 0
         BET1 = 1
@@ -35,20 +44,28 @@ else:
         BET1 = 1
     action_symbol = ['p','b']
 
-class KuhnTrainer:
+class ModLeducTrainer:
     """
-       The AI's wil play a version of Kuhn Poker with 3 possible actions: pass, bet 1 and bet 2. 
-       Each player has 2 coins, if someone does BET2, they're all-in.
-       Possible final histories: 
-        pp, pbp, pbb, pbBp, pbBb, pBp, pBb, pBB,
-        bp,       bb,  bBp,  bBb,
-        Bp,                                 BB 
+       The AI's wil play a version of Leduc Poker with 5 possible actions: pass, bet 1, bet 2, bet 3, and bet 4. 
+       Each player has 4 coins, if someone does BET4, they're all-in.
+       There are 2 rounds, and at the beggining of the second round, a public card is revealed.
+       Possible final histories for the round 1: 
+        2+0 pot: pp
+        2+1 pot: p1p, 1p
+        2+2 pot: p11, p2p, 2p
+        2+3 pot: p12p, p3p, 12p, 3p
+        2+4 pot: p121, p13p, p22, p4p, 121, 13p, 22, 4p
+        2+5 pot: p122p, p14p, p23p, p5p, 122p, 14p, 23p, 5p
+        2+6 pot: p1221, p123p, p132, p15p, p231, p24p, p33, p6p, 1221, 123p, 132, 15p, 231, 24p, 33, 6p
+        2+7 pot: p1222p, p124p, p133p, p141, p16p, ....
+        2+8 pot: ......
     """
     # How can we handle situations where not all actions are alowed?
 
     def __init__(self):
         self.node_map = {}
         self.log_file = None
+        # self.phase = 'preflop'
 
     def log(self, log_file):
         create_file(log_file)
@@ -125,39 +142,50 @@ class KuhnTrainer:
             return self.info_set < other.info_set
 
 
-    def get_possible_actions(self, history, cards, player, opponent):
+    def get_possible_actions(self, history, cards, player, opponent, players):
         """Returns the reward if it's a terminal node, or the possible actions if it's not."""
+        def filter_actions(bet, my_chips):
+            return [action for action in Actions if action.value == 0 or (action.value >= bet and action.value <= my_chips)]
+        
+        def half(value):
+            return value // 2
         is_player_card_higher = cards[player] > cards[opponent]
+        min_bet_to_continue = players[opponent][PHASE_BET_VALUE] - players[player][PHASE_BET_VALUE]
+        
 
-        if len(history) == 0:
-            return list(Actions), None
-        elif history[-3:] == "bBp":
-            return None, 2
-        elif len(history) >= 2:
-            if history[-2:] == "pp":
-                return None, 1 if is_player_card_higher else -1
-            elif history[-2:] == "bp" or history[-2:] == "Bp":
-                return None, 1
-            elif history[-2:] == "bb":
-                return None, 2 if is_player_card_higher else -2
-            elif history[-2:] == "BB" :
-                return None, 3 if is_player_card_higher else -3
-            elif history[-3:] == "bBb":
-                return None, 3 if is_player_card_higher else -3
-        if history[-2:] == 'bB':
-            possible_actions1 = list(Actions)
-            possible_actions1.remove(Actions(Actions.BET2))  # Remove the first action from the list
-            return possible_actions1, None
-
-        if history[-1] == 'B':
-            possible_actions = list(Actions)
-            possible_actions.remove(Actions(Actions.BET1))  # Remove the first action from the list
+        if min_bet_to_continue < 0:
+            # The opponent folded
+            my_bet_total = players[player][ROUND_BET_VALUE]
+            opponent_bet_total = players[opponent][ROUND_BET_VALUE]
+            total_bet = my_bet_total + opponent_bet_total + min_bet_to_continue
+            return None, half(total_bet)
+        
+        if not players[player][PLAYED_CURRENT_PHASE] and min_bet_to_continue == 0:
+            possible_actions = filter_actions(0, players[player][CHIPS])
             return possible_actions, None
-        else:
-            return list(Actions), None
-
-        return Actions, None
-        # raise Exception("Action or reward not found for history: " + history)
+        
+        if players[player][PLAYED_CURRENT_PHASE] and min_bet_to_continue == 0:
+            if False and self.phase == 'preflop':
+                self.phase = 'flop'
+                assert players[player][ROUND_BET_VALUE] == players[opponent][ROUND_BET_VALUE]
+            else:
+                # Showdown
+                my_bet_total = players[player][ROUND_BET_VALUE]
+                opponent_bet_total = players[opponent][ROUND_BET_VALUE]
+                total_bet = my_bet_total + opponent_bet_total
+                assert my_bet_total == opponent_bet_total
+                # if cards[player] == cards[2]:
+                #     return None, half(total_bet)
+                # elif cards[opponent] == cards[2]:
+                #     return None, half(-total_bet)
+                # else:
+                return None, half(total_bet if is_player_card_higher else -total_bet)
+            
+        if min_bet_to_continue > 0:
+            possible_actions = filter_actions(min_bet_to_continue, players[player][CHIPS])
+            return possible_actions, None
+        
+        raise Exception("Action or reward not found for history: " + history)
         
     def print_average_strategy(self, sum_of_rewards, iterations):
         print(f"Average game value: {sum_of_rewards / iterations}")
@@ -177,14 +205,20 @@ class KuhnTrainer:
         # from its "parent" node
         p0 = 1
         p1 = 1
-
+        chips = 2
+        turn_bet_value = 1
+        phase_bet_value = 1
+        round_bet_value = 1
+        played_current_phase = False
         algorithm_function = self.cfr if algorithm == 'cfr' else self.mccfr
 
         start_time = time.time()
         for i in range(iterations):
             random.shuffle(cards)
+            initial_player = (chips, turn_bet_value, phase_bet_value, round_bet_value, played_current_phase)
+            players = (initial_player, initial_player)
             is_exploring_phase = i < exploring_phase * iterations
-            sum_of_rewards += algorithm_function(cards, "", p0, p1, is_exploring_phase)
+            sum_of_rewards += algorithm_function(cards, "", p0, p1, players, is_exploring_phase)
             
             dict_str = ""
             for n in self.node_map.values():
@@ -206,7 +240,7 @@ class KuhnTrainer:
         elapsed_time = end_time - start_time
         print(f"{algorithm} took {elapsed_time} seconds to run.")
         json_name = f'{"3bet" if use_3bet else "2bet"}-{algorithm}-{len(cards)}cards-EP{float_to_custom_string(exploring_phase)}.json'
-        final_strategy_path = f'../analysis/blueprints/kuhntest-{json_name}'
+        final_strategy_path = f'../analysis/blueprints/leduc-{json_name}'
         create_file(final_strategy_path)
 
         node_dict = {}
@@ -220,36 +254,47 @@ class KuhnTrainer:
     def get_node(self, info_set, possible_actions=None):
         """Returns a node for the given information set. Creates the node if it doesn't exist."""
         return self.node_map.setdefault(info_set, self.Node(info_set, possible_actions))
+    
+    def set_bet_value(self, player, players, action):
+        new_players = list(players)
+        current_player = list(players[player])
+        current_player[CHIPS] -= action.value
+        current_player[TURN_BET_VALUE] = action.value
+        current_player[PHASE_BET_VALUE] += action.value
+        current_player[ROUND_BET_VALUE] += action.value
+        current_player[PLAYED_CURRENT_PHASE] = True
+        assert current_player[CHIPS] >= 0
 
+        new_players[player] = tuple(current_player)
+        return tuple(new_players)
 
-    def play_mccfr(self, cards, history, p0, p1, strategy, player, action, action_index, is_exploring_phase, alternative_play=None):
+    def play_mccfr(self, cards, history, p0, p1, players, strategy, player, action, action_index, is_exploring_phase, alternative_play=None):
         action_char = action_symbol[action.value]
         next_history = history + action_char
         node_action_utility = 0
         # node_action_utility receives a negative values because we are alternating between players,
         # and in the Leduc Poker game, the reward for a player is the opposite of the other player's reward
         if player == 0:
-            node_action_utility = -self.mccfr(cards, next_history, p0 * strategy[action_index], p1, is_exploring_phase, alternative_play)
+            node_action_utility = -self.mccfr(cards, next_history, p0 * strategy[action_index], p1, players, is_exploring_phase, alternative_play)
         else:
-            node_action_utility = -self.mccfr(cards, next_history, p0, p1 * strategy[action_index], is_exploring_phase, alternative_play)
+            node_action_utility = -self.mccfr(cards, next_history, p0, p1 * strategy[action_index], players, is_exploring_phase, alternative_play)
 
         return node_action_utility
 
-    def play_cfr(self, cards, history, p0, p1, strategy, player, action, action_index, is_exploring_phase):
+    def play_cfr(self, cards, history, p0, p1, players, strategy, player, action, action_index, is_exploring_phase):
         action_char = action_symbol[action.value]
         next_history = history + action_char
         if player == 0:
-            return -self.cfr(cards, next_history, p0 * strategy[action_index], p1, is_exploring_phase)
+            return -self.cfr(cards, next_history, p0 * strategy[action_index], p1, players, is_exploring_phase)
         else:
-            return -self.cfr(cards, next_history, p0, p1 * strategy[action_index], is_exploring_phase)
+            return -self.cfr(cards, next_history, p0, p1 * strategy[action_index], players, is_exploring_phase)
 
-    def mccfr(self, cards, history, p0, p1, is_exploring_phase, alternative_play=None):
+    def mccfr(self, cards, history, p0, p1, players, is_exploring_phase, alternative_play=None):
         # On the first iteration, the history is empty, so the first player starts
         plays = len(history)
         player = plays % 2
         opponent = 1 - player
-
-        possible_actions, rewards = self.get_possible_actions(history, cards, player, opponent)
+        possible_actions, rewards = self.get_possible_actions(history, cards, player, opponent, players)
 
         if possible_actions is None:
             return rewards
@@ -268,8 +313,10 @@ class KuhnTrainer:
         other_actions.remove(Actions(chosen_action))  # Remove the first action from the list
         action_index = node.actions.index(chosen_action)
 
+        updated_players = self.set_bet_value(player, players, chosen_action)
+
         # Play chosen action according to the strategy
-        node_chosen_action_utility = self.play_mccfr(cards, history, p0, p1, strategy, player, chosen_action, action_index, is_exploring_phase, alternative_play)
+        node_chosen_action_utility = self.play_mccfr(cards, history, p0, p1, updated_players, strategy, player, chosen_action, action_index, is_exploring_phase, alternative_play)
         node_actions_utilities[action_index] = node_chosen_action_utility
 
         # Play for other actions
@@ -277,7 +324,8 @@ class KuhnTrainer:
             for action in other_actions:
                 action_index = node.actions.index(action)
                 # passar um parametro para mccfr dizendo que se é jogada alternativa, e de quê jogador, se for do jogador 1, ai não tem for na jogada do jogador 0
-                node_action_utility = self.play_mccfr(cards, history, p0, p1, strategy, player, action, action_index, is_exploring_phase, alternative_play=player)
+                updated_players = self.set_bet_value(player, players, action)
+                node_action_utility = self.play_mccfr(cards, history, p0, p1, updated_players, strategy, player, action, action_index, is_exploring_phase, alternative_play=player)
                 node_actions_utilities[action_index] = node_action_utility
 
             for action in possible_actions:
@@ -288,12 +336,12 @@ class KuhnTrainer:
         return node_chosen_action_utility
     
 
-    def cfr(self, cards, history, p0, p1, is_exploring_phase):
+    def cfr(self, cards, history, p0, p1, players, is_exploring_phase):
         plays = len(history)
         player = plays % 2
         opponent = 1 - player
 
-        possible_actions, rewards = self.get_possible_actions(history, cards, player, opponent)
+        possible_actions, rewards = self.get_possible_actions(history, cards, player, opponent, players)
 
         if possible_actions is None:
             return rewards
@@ -311,7 +359,8 @@ class KuhnTrainer:
 
         for action in possible_actions:
             action_index = node.actions.index(action)
-            node_action_utility = self.play_cfr(cards, history, p0, p1, strategy, player, action, action_index, is_exploring_phase)
+            updated_players = self.set_bet_value(player, players, action)
+            node_action_utility = self.play_cfr(cards, history, p0, p1, updated_players, strategy, player, action, action_index, is_exploring_phase)
             node_actions_utilities[action_index] = node_action_utility
             node_util += strategy[action_index] * node_action_utility
 
@@ -324,6 +373,6 @@ class KuhnTrainer:
 
 
 if __name__ == "__main__":
-    trainer = KuhnTrainer()
+    trainer = ModLeducTrainer()
     trainer.log(f'../analysis/logs/{current_file_name}_{algorithm}.log')
     trainer.train(iterations)
