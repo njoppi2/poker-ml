@@ -2,6 +2,7 @@
 import os
 import logging
 import inspect
+from enum import Enum
 
 
 def color_print(value):
@@ -40,3 +41,29 @@ def create_file(log_file):
 def float_to_custom_string(num):
     str_num = str(num).replace('.', '_')  # Replacing decimal point with underscore
     return str_num
+
+class Card(Enum):
+    A = 3
+    K = 2
+    Q = 1
+
+    def __str__(self):
+        return self.name
+
+class Player:
+    def __init__(self, player_id: int):
+        self.id = player_id
+        self.chips = 0
+        self.turn_bet_value: int = 1
+        self.phase_bet_value: int = 1
+        self.round_bet_value: int = 1
+        self.round_bet_aux: int = 0
+        self.played_current_phase = False
+
+    def reset(self, chips: int):
+        self.chips = chips
+        self.turn_bet_value = 1
+        self.phase_bet_value = 1
+        self.round_bet_value = 1
+        self.round_bet_aux = 0
+        self.played_current_phase = False
