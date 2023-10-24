@@ -18,9 +18,9 @@ use_3bet = True
 if use_3bet:
     class Actions(Enum):
         PASS = 0
-        BET2 = 1
-        BET1 = 2
-    action_symbol = ['p', 'B', 'b']
+        BET1 = 1
+        BET2 = 2
+    action_symbol = ['p', 'b', 'B']
 else:
     class Actions(Enum):
         PASS = 0
@@ -41,8 +41,8 @@ class KuhnTrainer:
     def __init__(self):
         self.node_map_pA = {}
         self.node_map_pB = {}
-        self.jsonA = 'kuhn-3bet-mccfr-3cards-EP0_001'
-        self.jsonB = 'kuhn-3bet-mccfr-3cards-EP0_0'
+        self.jsonA = 'kuhntest-3bet-cfr-3cards-EP0_0'
+        self.jsonB = 'kuhn-3bet-cfr-3cards-EP0_0'
         self.create_nodes_from_json()
 
     def create_nodes_from_json(self):
@@ -82,7 +82,7 @@ class KuhnTrainer:
 
             self.num_actions = len(node_blueprint)
             if self.num_actions > 0:  # Ensure that there are elements to remove
-                self.actions = list(Actions)[:self.num_actions]
+                self.actions, _ = KuhnTrainer.get_possible_actions(None, info_set[1:], [1, 2, 3], 0, 1)
             else:
                 raise Exception("Invalid number of actions for node: " + info_set)
 
@@ -103,21 +103,21 @@ class KuhnTrainer:
             r = random.random()
             cumulative_probability = 0
             
-            for action in self.actions:
-                cumulative_probability += strategy[action.value]
+            for i in range(len(self.actions)):
+                cumulative_probability += strategy[i]
                 if r < cumulative_probability:
-                    return action
+                    return self.actions[i]
             
             raise Exception("No action taken for r: " + str(r) + " and cumulativeProbability: " + str(cumulative_probability) + " and strategy: " + str(strategy))
 
         def get_average_strategy(self):
             avg_strategy = [0.0] * self.num_actions
             normalizing_sum = sum(self.strategy_sum)
-            for action in self.actions:
+            for i in range(len(self.actions)):
                 if normalizing_sum > 0:
-                    avg_strategy[action.value] = self.strategy_sum[action.value] / normalizing_sum
+                    avg_strategy[i] = self.strategy_sum[i] / normalizing_sum
                 else:
-                    avg_strategy[action.value] = 1.0 / self.num_actions
+                    avg_strategy[i] = 1.0 / self.num_actions
             return avg_strategy
     
         def __str__(self):
@@ -133,7 +133,9 @@ class KuhnTrainer:
         is_player_card_higher = cards[player] > cards[opponent]
         
         if len(history) == 0:
-            return Actions, None
+            return list(Actions), None
+        elif len(history) == 3 and history[-3:] == "bBp":
+            return None, 2
         elif len(history) >= 2:
             if history[-2:] == "pp":
                 return None, 1 if is_player_card_higher else -1
@@ -145,13 +147,17 @@ class KuhnTrainer:
                 return None, 3 if is_player_card_higher else -3
             elif history[-3:] == "bBb":
                 return None, 3 if is_player_card_higher else -3
-            
+        if history[-2:] == 'bB':
+            possible_actions1 = list(Actions)
+            possible_actions1.remove(Actions(Actions.BET2))  # Remove the first action from the list
+            return possible_actions1, None
+
         if history[-1] == 'B':
             possible_actions = list(Actions)
             possible_actions.remove(Actions(Actions.BET1))  # Remove the first action from the list
             return possible_actions, None
         else:
-            return Actions, None
+            return list(Actions), None
 
         return Actions, None
         # raise Exception("Action or reward not found for history: " + history)

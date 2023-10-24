@@ -16,7 +16,7 @@ pool = multiprocessing.Pool(processes=num_processes)  # Create a Pool of worker 
 current_file_with_extension = os.path.basename(__file__)
 current_file_name = os.path.splitext(current_file_with_extension)[0]
 
-iterations = 1000
+iterations = 10000
 use_3bet = True
 algorithm = 'cfr'
 cards = [1, 2, 3]#, 4, 5, 6, 7, 8, 9]
@@ -26,9 +26,9 @@ exploring_phase = 0.0
 if use_3bet:
     class Actions(Enum):
         PASS = 0
-        BET2 = 1
-        BET1 = 2
-    action_symbol = ['p', 'B', 'b']
+        BET1 = 1
+        BET2 = 2
+    action_symbol = ['p', 'b', 'B']
 else:
     class Actions(Enum):
         PASS = 0
@@ -68,7 +68,7 @@ class KuhnTrainer:
         """ A node is an information set, which is the cards of the player and the history of the game."""
         def __init__(self, info_set, actions=Actions):
 
-            self.actions = actions
+            self.actions = list(actions)
             self.num_actions = len(actions)
             self.info_set = info_set
             # The regret and strategies of a node refer to the last action taken to reach the node
@@ -79,12 +79,12 @@ class KuhnTrainer:
         def get_strategy(self, realization_weight):
             """Turn sum of regrets into a probability distribution for actions."""
             normalizing_sum = sum(max(regret, 0) for regret in self.regret_sum)
-            for action in self.actions:
+            for i in range(len(self.actions)):
                 if normalizing_sum > 0:
-                    self.strategy[action.value] = max(self.regret_sum[action.value], 0) / normalizing_sum
+                    self.strategy[i] = max(self.regret_sum[i], 0) / normalizing_sum
                 else:
-                    self.strategy[action.value] = 1.0 / self.num_actions
-                self.strategy_sum[action.value] += realization_weight * self.strategy[action.value]
+                    self.strategy[i] = 1.0 / self.num_actions
+                self.strategy_sum[i] += realization_weight * self.strategy[i]
             return self.strategy
         
         def get_action(self, strategy):
@@ -92,21 +92,21 @@ class KuhnTrainer:
             r = random.random()
             cumulative_probability = 0
             
-            for action in self.actions:
-                cumulative_probability += strategy[action.value]
+            for i in range(len(self.actions)):
+                cumulative_probability += strategy[i]
                 if r < cumulative_probability:
-                    return action
+                    return self.actions[i]
             
             raise Exception("No action taken for r: " + str(r) + " and cumulativeProbability: " + str(cumulative_probability) + " and strategy: " + str(strategy))
 
         def get_average_strategy(self):
             avg_strategy = [0.0] * self.num_actions
             normalizing_sum = sum(self.strategy_sum)
-            for action in self.actions:
+            for i in range(len(self.actions)):
                 if normalizing_sum > 0:
-                    avg_strategy[action.value] = self.strategy_sum[action.value] / normalizing_sum
+                    avg_strategy[i] = self.strategy_sum[i] / normalizing_sum
                 else:
-                    avg_strategy[action.value] = 1.0 / self.num_actions
+                    avg_strategy[i] = 1.0 / self.num_actions
             return avg_strategy
 
         def __str__(self):
@@ -128,9 +128,11 @@ class KuhnTrainer:
     def get_possible_actions(self, history, cards, player, opponent):
         """Returns the reward if it's a terminal node, or the possible actions if it's not."""
         is_player_card_higher = cards[player] > cards[opponent]
-        
+
         if len(history) == 0:
-            return Actions, None
+            return list(Actions), None
+        elif history[-3:] == "bBp":
+            return None, 2
         elif len(history) >= 2:
             if history[-2:] == "pp":
                 return None, 1 if is_player_card_higher else -1
@@ -142,13 +144,17 @@ class KuhnTrainer:
                 return None, 3 if is_player_card_higher else -3
             elif history[-3:] == "bBb":
                 return None, 3 if is_player_card_higher else -3
-            
+        if history[-2:] == 'bB':
+            possible_actions1 = list(Actions)
+            possible_actions1.remove(Actions(Actions.BET2))  # Remove the first action from the list
+            return possible_actions1, None
+
         if history[-1] == 'B':
             possible_actions = list(Actions)
             possible_actions.remove(Actions(Actions.BET1))  # Remove the first action from the list
             return possible_actions, None
         else:
-            return Actions, None
+            return list(Actions), None
 
         return Actions, None
         # raise Exception("Action or reward not found for history: " + history)
@@ -216,26 +222,26 @@ class KuhnTrainer:
         return self.node_map.setdefault(info_set, self.Node(info_set, possible_actions))
 
 
-    def play_mccfr(self, cards, history, p0, p1, strategy, player, action, is_exploring_phase, alternative_play=None):
+    def play_mccfr(self, cards, history, p0, p1, strategy, player, action, action_index, is_exploring_phase, alternative_play=None):
         action_char = action_symbol[action.value]
         next_history = history + action_char
         node_action_utility = 0
         # node_action_utility receives a negative values because we are alternating between players,
-        # and in the Kuhn Poker game, the reward for a player is the opposite of the other player's reward
+        # and in the Leduc Poker game, the reward for a player is the opposite of the other player's reward
         if player == 0:
-            node_action_utility = -self.mccfr(cards, next_history, p0 * strategy[action.value], p1, is_exploring_phase, alternative_play)
+            node_action_utility = -self.mccfr(cards, next_history, p0 * strategy[action_index], p1, is_exploring_phase, alternative_play)
         else:
-            node_action_utility = -self.mccfr(cards, next_history, p0, p1 * strategy[action.value], is_exploring_phase, alternative_play)
+            node_action_utility = -self.mccfr(cards, next_history, p0, p1 * strategy[action_index], is_exploring_phase, alternative_play)
 
         return node_action_utility
 
-    def play_cfr(self, cards, history, p0, p1, strategy, player, action, is_exploring_phase):
+    def play_cfr(self, cards, history, p0, p1, strategy, player, action, action_index, is_exploring_phase):
         action_char = action_symbol[action.value]
         next_history = history + action_char
         if player == 0:
-            return -self.cfr(cards, next_history, p0 * strategy[action.value], p1, is_exploring_phase)
+            return -self.cfr(cards, next_history, p0 * strategy[action_index], p1, is_exploring_phase)
         else:
-            return -self.cfr(cards, next_history, p0, p1 * strategy[action.value], is_exploring_phase)
+            return -self.cfr(cards, next_history, p0, p1 * strategy[action_index], is_exploring_phase)
 
     def mccfr(self, cards, history, p0, p1, is_exploring_phase, alternative_play=None):
         # On the first iteration, the history is empty, so the first player starts
@@ -260,21 +266,24 @@ class KuhnTrainer:
         other_actions = list(possible_actions)  # Get a list of actions in the order of the enum
         chosen_action = node.get_action(strategy)
         other_actions.remove(Actions(chosen_action))  # Remove the first action from the list
+        action_index = node.actions.index(chosen_action)
 
         # Play chosen action according to the strategy
-        node_chosen_action_utility = self.play_mccfr(cards, history, p0, p1, strategy, player, chosen_action, is_exploring_phase, alternative_play)
-        node_actions_utilities[chosen_action.value] = node_chosen_action_utility
+        node_chosen_action_utility = self.play_mccfr(cards, history, p0, p1, strategy, player, chosen_action, action_index, is_exploring_phase, alternative_play)
+        node_actions_utilities[action_index] = node_chosen_action_utility
 
         # Play for other actions
         if alternative_play is None or alternative_play == player:
             for action in other_actions:
+                action_index = node.actions.index(action)
                 # passar um parametro para mccfr dizendo que se é jogada alternativa, e de quê jogador, se for do jogador 1, ai não tem for na jogada do jogador 0
-                node_action_utility = self.play_mccfr(cards, history, p0, p1, strategy, player, action, is_exploring_phase, alternative_play=player)
-                node_actions_utilities[action.value] = node_action_utility
+                node_action_utility = self.play_mccfr(cards, history, p0, p1, strategy, player, action, action_index, is_exploring_phase, alternative_play=player)
+                node_actions_utilities[action_index] = node_action_utility
 
-        for action in possible_actions:
-            regret = node_actions_utilities[action.value] - node_chosen_action_utility
-            node.regret_sum[action.value] += (p1 if player == 0 else p0) * regret
+            for action in possible_actions:
+                action_index = node.actions.index(action)
+                regret = node_actions_utilities[action_index] - node_chosen_action_utility
+                node.regret_sum[action_index] += (p1 if player == 0 else p0) * regret
 
         return node_chosen_action_utility
     
@@ -301,13 +310,15 @@ class KuhnTrainer:
         node_util = 0
 
         for action in possible_actions:
-            node_action_utility = self.play_cfr(cards, history, p0, p1, strategy, player, action, is_exploring_phase)
-            node_actions_utilities[action.value] = node_action_utility
-            node_util += strategy[action.value] * node_action_utility
+            action_index = node.actions.index(action)
+            node_action_utility = self.play_cfr(cards, history, p0, p1, strategy, player, action, action_index, is_exploring_phase)
+            node_actions_utilities[action_index] = node_action_utility
+            node_util += strategy[action_index] * node_action_utility
 
         for action in possible_actions:
-            regret = node_actions_utilities[action.value] - node_util
-            node.regret_sum[action.value] += (p1 if player == 0 else p0) * regret
+            action_index = node.actions.index(action)
+            regret = node_actions_utilities[action_index] - node_util
+            node.regret_sum[action_index] += (p1 if player == 0 else p0) * regret
 
         return node_util
 
