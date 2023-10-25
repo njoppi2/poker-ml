@@ -180,6 +180,10 @@ class ModLeducTrainer:
         
         if players[player][PLAYED_CURRENT_PHASE] and min_bet_to_continue == 0:
             if phase == 'preflop':
+                # if player 0 would end pre-flop, then the second player would start the flop, which is not what we want
+                if player == 1:
+                    possible_actions = filter_actions(0, 0)
+                    return possible_actions, None, False
                 possible_actions = filter_actions(min_bet_to_continue, players[player][CHIPS])
                 assert players[player][ROUND_BET_VALUE] == players[opponent][ROUND_BET_VALUE]
                 return possible_actions, None, True
@@ -264,16 +268,22 @@ class ModLeducTrainer:
         """Returns a node for the given information set. Creates the node if it doesn't exist."""
         return self.node_map.setdefault(info_set, self.Node(info_set, possible_actions))
     
-    def set_bet_value(self, player, players, action):
+    def set_bet_value(self, player, players, action, next_phase_started):
+        opponent = 1 - player
         new_players = list(players)
         current_player = list(players[player])
+        opponent_player = list(players[opponent])
+        
         current_player[CHIPS] -= action.value
         current_player[TURN_BET_VALUE] = action.value
         current_player[ROUND_BET_VALUE] += action.value
         current_player[PLAYED_CURRENT_PHASE] = True
-        assert current_player[CHIPS] >= 0
+        if next_phase_started:
+            opponent_player[PLAYED_CURRENT_PHASE] = False
 
         new_players[player] = tuple(current_player)
+        new_players[opponent] = tuple(opponent_player)
+        assert current_player[CHIPS] >= 0
         return tuple(new_players)
 
     def play_mccfr(self, cards, history, p0, p1, players, phase, strategy, player, action, action_index, is_exploring_phase, alternative_play=None):
@@ -299,17 +309,21 @@ class ModLeducTrainer:
 
     def mccfr(self, cards, history, p0, p1, players, phase, is_exploring_phase, alternative_play=None):
         # On the first iteration, the history is empty, so the first player starts
-        plays = len(history)
+        plays = len(history.replace("/", ""))
         player = plays % 2
         opponent = 1 - player
-        possible_actions, rewards, next_phase = self.get_possible_actions(history, cards, player, opponent, players, phase)
-        updated_phase = 'flop' if next_phase else phase
-
+        possible_actions, rewards, next_phase_started = self.get_possible_actions(history, cards, player, opponent, players, phase)
+        updated_phase = 'flop' if next_phase_started else phase
+        updated_history = history + '/' if next_phase_started else history
         if possible_actions is None:
             return rewards
+        
+        if next_phase_started:
+            # Player 0 should start the leduc flop
+            assert player == 0
 
-        public_card = cards[2] if phase == 'flop' else ""
-        info_set = str(cards[player]) + str(public_card) + history
+        public_card = cards[2] if updated_phase == 'flop' else ""
+        info_set = str(cards[player]) + str(public_card) + updated_history
         node = self.get_node(info_set, possible_actions)
 
         if is_exploring_phase:
@@ -323,10 +337,10 @@ class ModLeducTrainer:
         other_actions.remove(Actions(chosen_action))  # Remove the first action from the list
         action_index = node.actions.index(chosen_action)
 
-        updated_players = self.set_bet_value(player, players, chosen_action)
+        updated_players = self.set_bet_value(player, players, chosen_action, next_phase_started)
 
         # Play chosen action according to the strategy
-        node_chosen_action_utility = self.play_mccfr(cards, history, p0, p1, updated_players, updated_phase, strategy, player, chosen_action, action_index, is_exploring_phase, alternative_play)
+        node_chosen_action_utility = self.play_mccfr(cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, chosen_action, action_index, is_exploring_phase, alternative_play)
         node_actions_utilities[action_index] = node_chosen_action_utility
 
         # Play for other actions
@@ -334,8 +348,8 @@ class ModLeducTrainer:
             for action in other_actions:
                 action_index = node.actions.index(action)
                 # passar um parametro para mccfr dizendo que se é jogada alternativa, e de quê jogador, se for do jogador 1, ai não tem for na jogada do jogador 0
-                updated_players = self.set_bet_value(player, players, action)
-                node_action_utility = self.play_mccfr(cards, history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase, alternative_play=player)
+                updated_players = self.set_bet_value(player, players, action, next_phase_started)
+                node_action_utility = self.play_mccfr(cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase, alternative_play=player)
                 node_actions_utilities[action_index] = node_action_utility
 
             # if len(info_set) > 1 and info_set[0] == info_set[1]:
@@ -349,18 +363,24 @@ class ModLeducTrainer:
     
 
     def cfr(self, cards, history, p0, p1, players, phase, is_exploring_phase):
-        plays = len(history)
+        # On the first iteration, the history is empty, so the first player starts
+        plays = len(history.replace("/", ""))
         player = plays % 2
         opponent = 1 - player
 
-        possible_actions, rewards, next_phase = self.get_possible_actions(history, cards, player, opponent, players, phase)
-        updated_phase = 'flop' if next_phase else phase
+        possible_actions, rewards, next_phase_started = self.get_possible_actions(history, cards, player, opponent, players, phase)
+        updated_phase = 'flop' if next_phase_started else phase
+        updated_history = history + '/' if next_phase_started else history
 
         if possible_actions is None:
             return rewards
 
-        public_card = cards[2] if phase == 'flop' else ""
-        info_set = str(cards[player]) + str(public_card) + history
+        if next_phase_started:
+            # Player 0 should start the leduc flop
+            assert player == 0
+
+        public_card = cards[2] if updated_phase == 'flop' else ""
+        info_set = str(cards[player]) + str(public_card) + updated_history
         node = self.get_node(info_set, possible_actions)
 
         if is_exploring_phase:
@@ -373,8 +393,8 @@ class ModLeducTrainer:
 
         for action in possible_actions:
             action_index = node.actions.index(action)
-            updated_players = self.set_bet_value(player, players, action)
-            node_action_utility = self.play_cfr(cards, history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase)
+            updated_players = self.set_bet_value(player, players, action, next_phase_started)
+            node_action_utility = self.play_cfr(cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase)
             node_actions_utilities[action_index] = node_action_utility
             node_util += strategy[action_index] * node_action_utility
 
