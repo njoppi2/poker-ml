@@ -4,6 +4,7 @@ import logging
 import inspect
 from enum import Enum
 
+CHIPS, TURN_BET_VALUE, ROUND_BET_VALUE, PLAYED_CURRENT_PHASE = range(4)
 
 def color_print(value):
     r, g, b = (255, 255, 255)
@@ -53,20 +54,78 @@ class Card(Enum):
     def __lt__(self, other):
         return self.value < other.value
 
-class Player:
-    def __init__(self, player_id: int):
-        self.id = player_id
-        self.chips = 0
-        self.turn_bet_value: int = 1
-        self.phase_bet_value: int = 1
-        self.round_bet_value: int = 1
-        self.round_bet_aux: int = 0
-        self.played_current_phase = False
 
-    def reset(self, chips: int):
-        self.chips = chips
-        self.turn_bet_value = 1
-        self.phase_bet_value = 1
-        self.round_bet_value = 1
-        self.round_bet_aux = 0
-        self.played_current_phase = False
+def get_possible_actions(history, cards, player, opponent, players, phase, all_actions):
+    """Returns the reward if it's a terminal node, or the possible actions if it's not."""
+    def filter_actions(bet, my_chips):
+        return [action for action in all_actions if action.value == 0 or (action.value >= bet and action.value <= my_chips)]
+    
+    def half(value):
+        return value // 2
+    min_bet_to_continue = players[opponent][ROUND_BET_VALUE] - players[player][ROUND_BET_VALUE]
+    
+    def result_multiplier():
+        if cards[player] == cards[2]:
+            return 1
+        elif cards[opponent] == cards[2]:
+            return -1
+        elif cards[player] > cards[opponent]:
+            return 1
+        elif cards[player] < cards[opponent]:
+            return -1
+        else:
+            # cards[player] == cards[opponent]
+            return 0
+        
+    if min_bet_to_continue < 0:
+        # The opponent folded
+        my_bet_total = players[player][ROUND_BET_VALUE]
+        opponent_bet_total = players[opponent][ROUND_BET_VALUE]
+        total_bet = my_bet_total + opponent_bet_total + min_bet_to_continue
+        return None, half(total_bet), False
+    
+    if not players[player][PLAYED_CURRENT_PHASE] and min_bet_to_continue == 0:
+        possible_actions = filter_actions(0, players[player][CHIPS])
+        return possible_actions, None, False
+    
+    if players[player][PLAYED_CURRENT_PHASE] and min_bet_to_continue == 0:
+        if phase == 'preflop':
+            # if player 0 would end pre-flop, then the second player would start the flop, which is not what we want
+            if player == 1:
+                possible_actions = filter_actions(0, 0)
+                return possible_actions, None, False
+            possible_actions = filter_actions(min_bet_to_continue, players[player][CHIPS])
+            assert players[player][ROUND_BET_VALUE] == players[opponent][ROUND_BET_VALUE]
+            return possible_actions, None, True
+        else:
+            # Showdown
+            my_bet_total = players[player][ROUND_BET_VALUE]
+            opponent_bet_total = players[opponent][ROUND_BET_VALUE]
+            total_bet = my_bet_total + opponent_bet_total
+            assert my_bet_total == opponent_bet_total
+            return None, half(total_bet * result_multiplier()), False
+        
+    if min_bet_to_continue > 0:
+        possible_actions = filter_actions(min_bet_to_continue, players[player][CHIPS])
+        return possible_actions, None, False
+    
+    raise Exception("Action or reward not found for history: " + history)
+
+
+def set_bet_value(player, players, action, next_phase_started):
+    opponent = 1 - player
+    new_players = list(players)
+    current_player = list(players[player])
+    opponent_player = list(players[opponent])
+    
+    current_player[CHIPS] -= action.value
+    current_player[TURN_BET_VALUE] = action.value
+    current_player[ROUND_BET_VALUE] += action.value
+    current_player[PLAYED_CURRENT_PHASE] = True
+    if next_phase_started:
+        opponent_player[PLAYED_CURRENT_PHASE] = False
+
+    new_players[player] = tuple(current_player)
+    new_players[opponent] = tuple(opponent_player)
+    assert current_player[CHIPS] >= 0
+    return tuple(new_players)
