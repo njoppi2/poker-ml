@@ -68,7 +68,7 @@ class ModLeducTrainer:
     def log(self, log_file):
         create_file(log_file)
         self.log_file = log_file
-        log_format = 'Iteration: %(index)s\nAverage game value: %(avg_game_value)s\n%(result_dict)s\n'
+        log_format = 'Iteration: %(index)s\nAverage game value: %(avg_game_value)s\n Avg regret: %(avg_regret)s\n'
         formatter = logging.Formatter(log_format)
 
         with open(log_file, 'w') as file:
@@ -91,7 +91,7 @@ class ModLeducTrainer:
             self.strategy = [0.0] * self.num_actions
             self.strategy_sum = [0.0] * self.num_actions
 
-        def get_strategy(self, realization_weight):
+        def get_strategy(self, realization_weight, is_exploring_phase):
             """Turn sum of regrets into a probability distribution for actions."""
             normalizing_sum = sum(max(regret, 0) for regret in self.regret_sum)
             for i in range(len(self.actions)):
@@ -99,7 +99,8 @@ class ModLeducTrainer:
                     self.strategy[i] = max(self.regret_sum[i], 0) / normalizing_sum
                 else:
                     self.strategy[i] = 1.0 / self.num_actions
-                self.strategy_sum[i] += realization_weight * self.strategy[i]
+                if not is_exploring_phase:
+                    self.strategy_sum[i] += realization_weight * self.strategy[i]
             return self.strategy
         
         def get_action(self, strategy):
@@ -174,17 +175,22 @@ class ModLeducTrainer:
             is_exploring_phase = i < exploring_phase * iterations
             sum_of_rewards += self.nash_equilibrium_algorithm(cards, "", p0, p1, players, 'preflop',is_exploring_phase)
             
-            dict_str = ""
+            avg_regret = 0
             for n in self.node_map.values():
-                dict_str += str(n) + "\n"
+            #     dict_str += str(n) + "\n
+                avg_regret += sum(n.regret_sum)
+
+            avg_regret /= (len(self.node_map.values()) * (i+1))
             sample_iteration = {
                 'index': i,
                 'avg_game_value': sum_of_rewards / (i + 1),
-                'result_dict': dict_str  # Assuming self.node_map contains the result dictionary
+                'avg_regret': avg_regret
+                # 'result_dict': dict_str
             }
 
-            if i < 10:
-                self.logger.info('', extra=sample_iteration)
+            # if i < 10:
+            #     self.logger.info('', extra=sample_iteration)
+            self.logger.info('', extra=sample_iteration)
 
             # if i % 1000 == 0:
             #    self.print_average_strategy(sum_of_rewards, iterations)
@@ -244,7 +250,7 @@ class ModLeducTrainer:
         if is_exploring_phase:
             strategy = [1.0 / len(possible_actions)] * len(possible_actions)
         else:
-            strategy = node.get_strategy(p0 if player == 0 else p1) 
+            strategy = node.get_strategy(p0 if player == 0 else p1, is_exploring_phase) 
         node_actions_utilities = [0.0] * len(possible_actions)
 
         if algorithm == 'mccfr':
