@@ -19,7 +19,7 @@ def parse_log(log_file, property):
 # Main function to plot the graph
 def main():
     log_file = 'logs/mod_leduc_mccfr.log'  # Specify the name of your log file
-    # property = "Average game value:"
+    # property = "Average game valueA:"
     property = "Avg regret:"
     avg_game_values = parse_log(log_file, property)
     is_log_scale = False

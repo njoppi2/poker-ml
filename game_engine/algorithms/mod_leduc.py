@@ -3,10 +3,12 @@ import collections
 import logging
 from enum import Enum
 import os
-from functions import color_print, create_file, float_to_custom_string, Card, get_possible_actions, set_bet_value
+from functions import color_print, create_file, float_to_custom_string, Card, get_possible_actions, set_bet_value, generate_random_string
 import time
-import json
+import pickle
 import multiprocessing
+import re
+from types import MappingProxyType
 
 random.seed(42)
 
@@ -20,7 +22,16 @@ use_3bet = True
 algorithm = 'mccfr'
 cards = [Card.Q, Card.Q, Card.K, Card.K, Card.A, Card.A]
 # cards = [1, 1, 2, 2, 3, 3]
-exploring_phase = 0.0
+exploring_phase = 0
+
+""" Be careful when creating a model by playing against fixed strategies, because your model might not have all info_sets """
+fixed_strategyA = None
+fixed_strategyB = None
+# fixed_strategyA = 'leduc-vof-mccfr-6cards-EP0_1-iter100000'
+# fixed_strategyB = 'leduc-VMR-vof-mccfr-6cards-EP0_1-iter10000'
+is_model_fixed = (fixed_strategyA is not None), (fixed_strategyB is not None)
+is_there_a_learning_model = not (is_model_fixed[0] and is_model_fixed[1])
+
 
 
 if use_3bet:
@@ -63,12 +74,39 @@ class ModLeducTrainer:
 
     def __init__(self):
         self.node_map = {}
+        self.node_mapA = self.node_map
+        self.node_mapB = self.node_map
         self.log_file = None
+        self.create_nodes_from_pickle(fixed_strategyA, fixed_strategyB)
+
+    def create_nodes_from_pickle(self, fileA, fileB):
+        current_directory = os.path.dirname(os.path.abspath(__file__))
+
+        if fileA is not None:
+            node_mapA = {}
+            blueprints_directory_pA = os.path.join(current_directory, f'../analysis/blueprints/{fileA}.pkl')
+            with open(blueprints_directory_pA, 'rb') as f:
+                dict_map_pA = pickle.load(f)
+            for key, value in dict_map_pA.items():
+                action_values, strategy = value
+                actions = list(filter(lambda a: a.value in action_values, Actions))
+                node_mapA[key] = self.Node(key, actions, strategy)
+            self.node_mapA = MappingProxyType(node_mapA)
+        if fileB is not None:
+            node_mapB = {}
+            blueprints_directory_pB = os.path.join(current_directory, f'../analysis/blueprints/{fileB}.pkl')
+            with open(blueprints_directory_pB, 'rb') as f:
+                dict_map_pB = pickle.load(f)
+            for key, value in dict_map_pB.items():
+                action_values, strategy = value
+                actions = list(filter(lambda a: a.value in action_values, Actions))
+                node_mapB[key] = self.Node(key, actions, strategy)
+            self.node_mapB = MappingProxyType(node_mapB)
 
     def log(self, log_file):
         create_file(log_file)
         self.log_file = log_file
-        log_format = 'Iteration: %(index)s\nAverage game value: %(avg_game_value)s\n Avg regret: %(avg_regret)s\n'
+        log_format = 'Iteration: %(index)s\nAverage game valueA: %(avg_game_valueA)s\nAverage game valueB: %(avg_game_valueB)s\n Avg regret: %(avg_regret)s\n'
         formatter = logging.Formatter(log_format)
 
         with open(log_file, 'w') as file:
@@ -81,26 +119,27 @@ class ModLeducTrainer:
 
     class Node:
         """ A node is an information set, which is the cards of the player and the history of the game."""
-        def __init__(self, info_set, actions=Actions):
+        def __init__(self, info_set, actions=Actions, strategy=None):
 
             self.actions = list(actions)
             self.num_actions = len(actions)
             self.info_set = info_set
             # The regret and strategies of a node refer to the last action taken to reach the node
             self.regret_sum = [0.0] * self.num_actions
-            self.strategy = [0.0] * self.num_actions
+            self.strategy = [0.0] * self.num_actions if strategy is None else strategy
             self.strategy_sum = [0.0] * self.num_actions
 
-        def get_strategy(self, realization_weight, is_exploring_phase):
+        def get_strategy(self, realization_weight, is_exploring_phase, is_current_model_fixed):
             """Turn sum of regrets into a probability distribution for actions."""
-            normalizing_sum = sum(max(regret, 0) for regret in self.regret_sum)
-            for i in range(len(self.actions)):
-                if normalizing_sum > 0:
-                    self.strategy[i] = max(self.regret_sum[i], 0) / normalizing_sum
-                else:
-                    self.strategy[i] = 1.0 / self.num_actions
-                if not is_exploring_phase:
-                    self.strategy_sum[i] += realization_weight * self.strategy[i]
+            if not is_current_model_fixed:
+                normalizing_sum = sum(max(regret, 0) for regret in self.regret_sum)
+                for i in range(len(self.actions)):
+                    if normalizing_sum > 0:
+                        self.strategy[i] = max(self.regret_sum[i], 0) / normalizing_sum
+                    else:
+                        self.strategy[i] = 1.0 / self.num_actions
+                    if not is_exploring_phase:
+                        self.strategy_sum[i] += realization_weight * self.strategy[i]
             return self.strategy
         
         def get_action(self, strategy):
@@ -144,22 +183,26 @@ class ModLeducTrainer:
         def __lt__(self, other):
             return self.info_set < other.info_set
         
-    def print_average_strategy(self, sum_of_rewards, iterations):
-        print(f"Average game value: {sum_of_rewards / iterations}")
+    def print_model(self, sum_of_rewards, iterations):
         columns = ""
         for action in Actions:
             columns += f"{action} "
         print(f"Columns   : {columns}")
         for n in sorted(self.node_map.values()):
             print(n.color_print())
+        print(f"Size of model node map = {len(self.node_map)}, should be 249\n")
 
     def train(self, iterations):
+        """If you call the train method multiple times with the same parameters, it won't produce the
+        same output models, because the cards list starts shuffled differently usually, and because the seed
+        needs to be set again."""
+        # cards.sort(key=lambda x: x.value)
+
         print(f"Parameters: {iterations} iterations, {len(cards)} cards, {algorithm}, {exploring_phase} exploring phase, {use_3bet} 3bet\n")
 
-        sum_of_rewards = 0
-
-        # p0 and p1 store, respectively, the probability of the player 0 and player 1 reaching the current node,
-        # from its "parent" node
+        sum_of_rewards = [0] * 2
+        """ p0 and p1 store, respectively, the probability of the player 0 and player 1 reaching the current node,
+        from its "parent" node """
         p0 = 1
         p1 = 1
         chips = 2
@@ -168,74 +211,112 @@ class ModLeducTrainer:
         played_current_phase = False
 
         start_time = time.time()
-        for i in range(iterations):
-            random.shuffle(cards)
-            initial_player = (chips, turn_bet_value, round_bet_value, played_current_phase)
-            players = (initial_player, initial_player)
-            is_exploring_phase = i < exploring_phase * iterations
-            sum_of_rewards += self.nash_equilibrium_algorithm(cards, "", p0, p1, players, 'preflop',is_exploring_phase)
+
+        for p in range(2):
+            model_A_is_p0 = 1 - p
+            if is_model_fixed[0] is not None or is_model_fixed[1] is not None:
+                if model_A_is_p0:
+                    print(f"Player {fixed_strategyA or 'training model'} is starting.")
+                else:
+                    print(f"Player {fixed_strategyB or 'training model'} is starting.")
+
+            for i in range(iterations):
+                    
+                random.shuffle(cards)
+                initial_player = (chips, turn_bet_value, round_bet_value, played_current_phase)
+                players = (initial_player, initial_player)
+                is_exploring_phase = i < exploring_phase * iterations
+                iteration_reward = self.nash_equilibrium_algorithm(cards, "", p0, p1, players, 'preflop', is_exploring_phase, model_A_is_p0)
+                sum_of_rewards[0] += model_A_is_p0 * (iteration_reward * (not is_exploring_phase))
+                sum_of_rewards[1] += (not model_A_is_p0) * (iteration_reward * (not is_exploring_phase))
+                
+                # avg_regret = 0
+                # for n in self.node_mapA.values():
+                #     avg_regret += sum(n.regret_sum)
+                # for n in self.node_mapB.values():
+                #     avg_regret += sum(n.regret_sum)
+
+                # avg_regret /= (len(self.node_mapA.values()) + len(self.node_mapB.values())) * (i+1)
+                sample_iteration = {
+                    'index': i,
+                    'avg_game_valueA': sum_of_rewards[0] / max((i*p + 1) - exploring_phase * iterations, 1),
+                    'avg_game_valueB': sum_of_rewards[1] / max((i*p + 1) - exploring_phase * iterations, 1),
+                    'avg_regret': -420.69
+                }
+
+                # if i < 10:
+                #     self.logger.info('', extra=sample_iteration)
+                self.logger.info('', extra=sample_iteration)
+
+        # if at least one of the players is not a fixed strategy, print their average strategy
+
+        algorithm_id = generate_random_string(3)
+        avg_game_valueA = sum_of_rewards[0] / iterations
+        print(f"Average game value for {fixed_strategyA or algorithm_id} as p0: {avg_game_valueA}")
+        avg_game_valueB = sum_of_rewards[1] / iterations
+        print(f"Average game value for {fixed_strategyB or algorithm_id} as p0: {avg_game_valueB}")
+        adversary_id = ''
+        if is_there_a_learning_model:
+            if is_model_fixed[0]:
+                match = re.search(r'-(\w{3})', fixed_strategyA)
+                if match:
+                    adversary_id = '-' + match.group(1)
+            elif is_model_fixed[1]:
+                match = re.search(r'-(\w{3})', fixed_strategyB)
+                if match:
+                    adversary_id = '-' + match.group(1)
+
+            self.print_model(sum_of_rewards, iterations)
+            pickle_name = f'{algorithm_id}{adversary_id}-{algorithm}-{len(cards)}cards-EP{float_to_custom_string(exploring_phase)}-iter{iterations}.pkl'
+            final_strategy_path = f'../analysis/blueprints/leduc-{pickle_name}'
+            create_file(final_strategy_path)
+            node_dict = {}
+            for n in sorted(self.node_map.values()):
+                node_dict[n.info_set] = (list(map(lambda a: a.value, n.actions)), n.get_average_strategy())
+            with open(final_strategy_path, 'wb') as file:
+                pickle.dump(node_dict, file)
             
-            avg_regret = 0
-            for n in self.node_map.values():
-            #     dict_str += str(n) + "\n
-                avg_regret += sum(n.regret_sum)
-
-            avg_regret /= (len(self.node_map.values()) * (i+1))
-            sample_iteration = {
-                'index': i,
-                'avg_game_value': sum_of_rewards / (i + 1),
-                'avg_regret': avg_regret
-                # 'result_dict': dict_str
-            }
-
-            # if i < 10:
-            #     self.logger.info('', extra=sample_iteration)
-            self.logger.info('', extra=sample_iteration)
-
-            # if i % 1000 == 0:
-            #    self.print_average_strategy(sum_of_rewards, iterations)
-
-        self.print_average_strategy(sum_of_rewards, iterations)
         end_time = time.time()
         elapsed_time = end_time - start_time
-        print(f"{algorithm} took {elapsed_time} seconds to run.")
-        json_name = f'{"3bet" if use_3bet else "2bet"}-{algorithm}-{len(cards)}cards-EP{float_to_custom_string(exploring_phase)}.json'
-        final_strategy_path = f'../analysis/blueprints/leduc-{json_name}'
-        create_file(final_strategy_path)
+        print(f"{algorithm_id} {algorithm} took {elapsed_time} seconds to run.")
 
-        node_dict = {}
-        for n in sorted(self.node_map.values()):
-            node_dict[n.info_set] = n.get_average_strategy()
-
-        with open(final_strategy_path, 'w') as file:
-            json.dump(node_dict, file, indent=4, sort_keys=True)
-
-
-    def get_node(self, info_set, possible_actions=None):
+    def get_node(self, info_set, is_model_B, is_current_model_fixed, possible_actions=None):
         """Returns a node for the given information set. Creates the node if it doesn't exist."""
-        return self.node_map.setdefault(info_set, self.Node(info_set, possible_actions))
-    
+        if not is_current_model_fixed:
+            return self.node_map.setdefault(info_set, self.Node(info_set, possible_actions))
+        else:
+            if is_model_B:
+                return self.node_mapB[info_set]
+            else:
+                return self.node_mapA[info_set]
 
-    def perform_action(self, cards, history, p0, p1, players, phase, strategy, player, action, action_index, is_exploring_phase, alternative_play=None):
+
+    def perform_action(self, cards, history, p0, p1, players, phase, strategy, player, action, action_index, is_exploring_phase, model_A_is_p0, alternative_play=None):
         action_char = action_symbol[action.value]
         next_history = history + action_char
         # node_action_utility receives a negative values because we are alternating between players,
         # and in the Leduc Poker game, the reward for a player is the opposite of the other player's reward
         if player == 0:
-            node_action_utility = -self.nash_equilibrium_algorithm(cards, next_history, p0 * strategy[action_index], p1, players, phase, is_exploring_phase, alternative_play)
+            node_action_utility = -self.nash_equilibrium_algorithm(cards, next_history, p0 * strategy[action_index], p1, players, phase, is_exploring_phase, model_A_is_p0, alternative_play)
         else:
-            node_action_utility = -self.nash_equilibrium_algorithm(cards, next_history, p0, p1 * strategy[action_index], players, phase, is_exploring_phase, alternative_play)
+            node_action_utility = -self.nash_equilibrium_algorithm(cards, next_history, p0, p1 * strategy[action_index], players, phase, is_exploring_phase, model_A_is_p0, alternative_play)
 
         return node_action_utility
 
-    def nash_equilibrium_algorithm(self, cards, history, p0, p1, players, phase, is_exploring_phase, alternative_play=None):
+    def nash_equilibrium_algorithm(self, cards, history, p0, p1, players, phase, is_exploring_phase, model_A_is_p0, alternative_play=None):
         # On the first iteration, the history is empty, so the first player starts
         plays = len(history.replace("/", ""))
         player = plays % 2
         opponent = 1 - player
+        model_A_is_p0 == player
+        is_model_B = player == model_A_is_p0
+
+        is_current_model_fixed = is_model_fixed[is_model_B]
         possible_actions, rewards, next_phase_started = get_possible_actions(history, cards, player, opponent, players, phase, Actions)
         updated_phase = 'flop' if next_phase_started else phase
         updated_history = history + '/' if next_phase_started else history
+        public_card = cards[2] if updated_phase == 'flop' else ""
+        info_set = str(cards[player]) + str(public_card) + updated_history
         if possible_actions is None:
             return rewards
         
@@ -243,17 +324,15 @@ class ModLeducTrainer:
             # Player 0 should start the leduc flop
             assert player == 0
 
-        public_card = cards[2] if updated_phase == 'flop' else ""
-        info_set = str(cards[player]) + str(public_card) + updated_history
-        node = self.get_node(info_set, possible_actions)
+        node = self.get_node(info_set, is_model_B, is_current_model_fixed, possible_actions)
 
-        if is_exploring_phase:
+        if is_exploring_phase and not is_current_model_fixed:
             strategy = [1.0 / len(possible_actions)] * len(possible_actions)
         else:
-            strategy = node.get_strategy(p0 if player == 0 else p1, is_exploring_phase) 
+            strategy = node.get_strategy(p0 if player == 0 else p1, is_exploring_phase, is_current_model_fixed) 
         node_actions_utilities = [0.0] * len(possible_actions)
 
-        if algorithm == 'mccfr':
+        if algorithm == 'mccfr' or is_current_model_fixed:
             other_actions = list(possible_actions)  # Get a list of actions in the order of the enum
             chosen_action = node.get_action(strategy)
             other_actions.remove(Actions(chosen_action))  # Remove the first action from the list
@@ -262,16 +341,16 @@ class ModLeducTrainer:
             updated_players = set_bet_value(player, players, chosen_action, next_phase_started)
 
             # Play chosen action according to the strategy
-            node_chosen_action_utility = self.perform_action(cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, chosen_action, action_index, is_exploring_phase, alternative_play)
+            node_chosen_action_utility = self.perform_action(cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, chosen_action, action_index, is_exploring_phase, model_A_is_p0, alternative_play)
             node_actions_utilities[action_index] = node_chosen_action_utility
 
             # Play for other actions
-            if alternative_play is None or alternative_play == player:
+            if not is_current_model_fixed and alternative_play != opponent:
                 for action in other_actions:
                     action_index = node.actions.index(action)
                     # passar um parametro para mccfr dizendo que se é jogada alternativa, e de quê jogador, se for do jogador 1, ai não tem for na jogada do jogador 0
                     updated_players = set_bet_value(player, players, action, next_phase_started)
-                    node_action_utility = self.perform_action(cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase, alternative_play=player)
+                    node_action_utility = self.perform_action(cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase, model_A_is_p0, alternative_play=player)
                     node_actions_utilities[action_index] = node_action_utility
 
                 # if len(info_set) > 1 and info_set[0] == info_set[1]:
@@ -288,14 +367,15 @@ class ModLeducTrainer:
             for action in possible_actions:
                 action_index = node.actions.index(action)
                 updated_players = set_bet_value(player, players, action, next_phase_started)
-                node_action_utility = self.perform_action(cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase)
+                node_action_utility = self.perform_action(cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase, model_A_is_p0)
                 node_actions_utilities[action_index] = node_action_utility
                 node_util += strategy[action_index] * node_action_utility
 
-            for action in possible_actions:
-                action_index = node.actions.index(action)
-                regret = node_actions_utilities[action_index] - node_util
-                node.regret_sum[action_index] += (p1 if player == 0 else p0) * regret
+            if not is_current_model_fixed:
+                for action in possible_actions:
+                    action_index = node.actions.index(action)
+                    regret = node_actions_utilities[action_index] - node_util
+                    node.regret_sum[action_index] += (p1 if player == 0 else p0) * regret
 
             return node_util
 

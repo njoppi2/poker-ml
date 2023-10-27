@@ -3,6 +3,10 @@ import os
 import logging
 import inspect
 from enum import Enum
+import pickle
+import json
+import random
+import string
 
 CHIPS, TURN_BET_VALUE, ROUND_BET_VALUE, PLAYED_CURRENT_PHASE = range(4)
 
@@ -42,6 +46,10 @@ def create_file(log_file):
 def float_to_custom_string(num):
     str_num = str(num).replace('.', '_')  # Replacing decimal point with underscore
     return str_num
+
+def generate_random_string(length):
+    letters = string.ascii_letters
+    return ''.join(random.choice(letters) for _ in range(length))
 
 class Card(Enum):
     Q = 1
@@ -129,3 +137,16 @@ def set_bet_value(player, players, action, next_phase_started):
     new_players[opponent] = tuple(opponent_player)
     assert current_player[CHIPS] >= 0
     return tuple(new_players)
+
+def create_json_from_pickle(pickle_file_path):
+    with open(pickle_file_path, 'rb') as pickle_file:
+        node_dict = pickle.load(pickle_file)
+
+    json_file_path = pickle_file_path.replace('.pkl', '.json')
+
+    with open(json_file_path, 'w') as json_file:
+        json.dump(node_dict, json_file, indent=4, sort_keys=True)
+
+
+if __name__ == "__main__":
+    create_json_from_pickle('../analysis/blueprints/leduc-vof-mccfr-6cards-EP0_1-iter100000.pkl')
