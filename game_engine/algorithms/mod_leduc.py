@@ -12,8 +12,8 @@ from types import MappingProxyType
 
 random.seed(42)
 
-num_processes = multiprocessing.cpu_count()
-pool = multiprocessing.Pool(processes=num_processes)  # Create a Pool of worker processes
+# num_processes = multiprocessing.cpu_count()
+# pool = multiprocessing.Pool(processes=num_processes)  # Create a Pool of worker processes
 current_file_with_extension = os.path.basename(__file__)
 current_file_name = os.path.splitext(current_file_with_extension)[0]
 
@@ -22,13 +22,13 @@ use_3bet = True
 algorithm = 'mccfr'
 cards = [Card.Q, Card.Q, Card.K, Card.K, Card.A, Card.A]
 # cards = [1, 1, 2, 2, 3, 3]
-exploring_phase = 0
+exploring_phase = 0.0
 
 """ Be careful when creating a model by playing against fixed strategies, because your model might not have all info_sets """
 fixed_strategyA = None
 fixed_strategyB = None
-# fixed_strategyA = 'leduc-vof-mccfr-6cards-EP0_1-iter100000'
-# fixed_strategyB = 'leduc-VMR-vof-mccfr-6cards-EP0_1-iter10000'
+# fixed_strategyA = 'leduc-Lma-mccfr-6cards-EP0_1-iter100000'
+# fixed_strategyB = 'leduc-ptM-Lma-mccfr-6cards-EP0_1-iter100000'
 is_model_fixed = (fixed_strategyA is not None), (fixed_strategyB is not None)
 is_there_a_learning_model = not (is_model_fixed[0] and is_model_fixed[1])
 
@@ -106,7 +106,7 @@ class ModLeducTrainer:
     def log(self, log_file):
         create_file(log_file)
         self.log_file = log_file
-        log_format = 'Iteration: %(index)s\nAverage game valueA: %(avg_game_valueA)s\nAverage game valueB: %(avg_game_valueB)s\n Avg regret: %(avg_regret)s\n'
+        log_format = 'Iteration: %(index)s\nAverage game valueA: %(avg_game_valueA)s\nAverage game valueB: %(avg_game_valueB)s\nAvg regretA: %(avg_regretA)s\nAvg regretB: %(avg_regretB)s\n'
         formatter = logging.Formatter(log_format)
 
         with open(log_file, 'w') as file:
@@ -128,10 +128,14 @@ class ModLeducTrainer:
             self.regret_sum = [0.0] * self.num_actions
             self.strategy = [0.0] * self.num_actions if strategy is None else strategy
             self.strategy_sum = [0.0] * self.num_actions
+            self.times_regret_sum_updated = 0
+            self.times_action_got_positive_reward = [0] * self.num_actions
 
         def get_strategy(self, realization_weight, is_exploring_phase, is_current_model_fixed):
             """Turn sum of regrets into a probability distribution for actions."""
             if not is_current_model_fixed:
+                # r = random.random()
+                # test_bad_actions = r < 0.05
                 normalizing_sum = sum(max(regret, 0) for regret in self.regret_sum)
                 for i in range(len(self.actions)):
                     if normalizing_sum > 0:
@@ -172,13 +176,20 @@ class ModLeducTrainer:
             avg_strategy = self.get_average_strategy()
             formatted_avg_strategy = ""
             last_action_index = 0
+            filled_columns = 0
             for i in range(self.num_actions):
                 for _ in range(self.actions[i].value - last_action_index):
                     formatted_avg_strategy += " "*13
+                    filled_columns += 1
                 formatted_avg_strategy += color_print(avg_strategy[i])
+                filled_columns += 1
                 last_action_index += 1
+            
+            for _ in range(len(Actions) - filled_columns):
+                formatted_avg_strategy += " "*13
+
             min_width_info_set = f"{self.info_set:<10}"  # Ensuring minimum 10 characters for self.info_set
-            return f"{min_width_info_set}: {formatted_avg_strategy}"
+            return f"{min_width_info_set}: {formatted_avg_strategy} {self.times_regret_sum_updated}"
         
         def __lt__(self, other):
             return self.info_set < other.info_set
@@ -209,10 +220,11 @@ class ModLeducTrainer:
         turn_bet_value = 1
         round_bet_value = 1
         played_current_phase = False
+        final_avg_game_valueA = 0
 
         start_time = time.time()
-
-        for p in range(2):
+        times_running = 1 if not is_model_fixed[0] and not is_model_fixed[1] else 2
+        for p in range(times_running):
             model_A_is_p0 = 1 - p
             if is_model_fixed[0] is not None or is_model_fixed[1] is not None:
                 if model_A_is_p0:
@@ -221,7 +233,7 @@ class ModLeducTrainer:
                     print(f"Player {fixed_strategyB or 'training model'} is starting.")
 
             for i in range(iterations):
-                    
+                total_iteration = i + p * iterations + 1
                 random.shuffle(cards)
                 initial_player = (chips, turn_bet_value, round_bet_value, played_current_phase)
                 players = (initial_player, initial_player)
@@ -239,14 +251,17 @@ class ModLeducTrainer:
                 # avg_regret /= (len(self.node_mapA.values()) + len(self.node_mapB.values())) * (i+1)
                 sample_iteration = {
                     'index': i,
-                    'avg_game_valueA': sum_of_rewards[0] / max((i*p + 1) - exploring_phase * iterations, 1),
-                    'avg_game_valueB': sum_of_rewards[1] / max((i*p + 1) - exploring_phase * iterations, 1),
-                    'avg_regret': -420.69
+                    'avg_game_valueA': final_avg_game_valueA or sum_of_rewards[0] / max((i + 1) - exploring_phase * iterations, 1),
+                    'avg_game_valueB': sum_of_rewards[1] / max((i + 1) - exploring_phase * iterations, 1),
+                    'avg_regretA': sum((sum(n.regret_sum) / len(n.regret_sum)) for n in self.node_mapA.values()) / (len(self.node_mapA.values()) * total_iteration),
+                    'avg_regretB': sum((sum(n.regret_sum) / len(n.regret_sum)) for n in self.node_mapB.values()) / (len(self.node_mapB.values()) * total_iteration),
                 }
 
                 # if i < 10:
                 #     self.logger.info('', extra=sample_iteration)
                 self.logger.info('', extra=sample_iteration)
+
+            final_avg_game_valueA = sum_of_rewards[0] / (iterations * (1 - exploring_phase))
 
         # if at least one of the players is not a fixed strategy, print their average strategy
 
@@ -358,7 +373,14 @@ class ModLeducTrainer:
                 for action in possible_actions:
                     action_index = node.actions.index(action)
                     regret = node_actions_utilities[action_index] - node_chosen_action_utility
+                    node.times_action_got_positive_reward[action_index] += (regret >= 0)
+
+                    # if node.times_action_got_positive_reward[action_index] == node.times_regret_sum_updated and node.times_regret_sum_updated > 20 and action != Actions.PASS:
+                    #     node.regret_sum[action_index] += (p1 if player == 0 else p0) * regret * 2
+                    # else:
+                    #     node.regret_sum[action_index] += (p1 if player == 0 else p0) * regret
                     node.regret_sum[action_index] += (p1 if player == 0 else p0) * regret
+                node.times_regret_sum_updated += 1
 
             return node_chosen_action_utility
         
