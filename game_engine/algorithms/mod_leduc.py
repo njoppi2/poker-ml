@@ -31,6 +31,7 @@ fixed_strategyB = None
 # fixed_strategyB = 'leduc-ptM-Lma-mccfr-6cards-EP0_1-iter100000'
 is_model_fixed = (fixed_strategyA is not None), (fixed_strategyB is not None)
 is_there_a_learning_model = not (is_model_fixed[0] and is_model_fixed[1])
+model_name = f'{algorithm}-{len(cards)}cards-EP{float_to_custom_string(exploring_phase)}-iter{iterations}'
 
 
 
@@ -209,7 +210,7 @@ class ModLeducTrainer:
         needs to be set again."""
         # cards.sort(key=lambda x: x.value)
 
-        print(f"Parameters: {iterations} iterations, {len(cards)} cards, {algorithm}, {exploring_phase} exploring phase, {use_3bet} 3bet\n")
+        print(f"Parameters: {iterations} iterations, {len(cards)} cards, {algorithm}, {exploring_phase} exploring phase\n")
 
         sum_of_rewards = [0] * 2
         """ p0 and p1 store, respectively, the probability of the player 0 and player 1 reaching the current node,
@@ -282,7 +283,7 @@ class ModLeducTrainer:
                     adversary_id = '-' + match.group(1)
 
             self.print_model(sum_of_rewards, iterations)
-            pickle_name = f'{algorithm_id}{adversary_id}-{algorithm}-{len(cards)}cards-EP{float_to_custom_string(exploring_phase)}-iter{iterations}.pkl'
+            pickle_name = f'{algorithm_id}{adversary_id}-{model_name}.pkl'
             final_strategy_path = f'../analysis/blueprints/leduc-{pickle_name}'
             create_file(final_strategy_path)
             node_dict = {}
@@ -293,7 +294,7 @@ class ModLeducTrainer:
             
         end_time = time.time()
         elapsed_time = end_time - start_time
-        print(f"{algorithm_id} {algorithm} took {elapsed_time} seconds to run.")
+        print(f"{algorithm_id}{adversary_id} {model_name} took {elapsed_time} seconds to run.")
 
     def get_node(self, info_set, is_model_B, is_current_model_fixed, possible_actions=None):
         """Returns a node for the given information set. Creates the node if it doesn't exist."""
@@ -407,5 +408,5 @@ class ModLeducTrainer:
 
 if __name__ == "__main__":
     trainer = ModLeducTrainer()
-    trainer.log(f'../analysis/logs/{current_file_name}_{algorithm}.log')
+    trainer.log(f'../analysis/logs/{model_name}.log')
     trainer.train(iterations)
