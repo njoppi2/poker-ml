@@ -1,4 +1,9 @@
 import matplotlib.pyplot as plt
+import os
+
+# Get the directory path of the current script
+current_file_path = os.path.realpath(__file__)
+directory_path = os.path.dirname(current_file_path)
 
 # Function to parse the log file and extract Average Game Values
 def parse_log(log_file, property):
@@ -18,9 +23,9 @@ def parse_log(log_file, property):
 
 # Main function to plot the graph
 def main():
-    log_file = 'logs/mod_leduc_mccfr.log'  # Specify the name of your log file
-    # property = "Average game valueA:"
-    property = "Avg regret:"
+    log_file = f'{directory_path}/logs/mod_leduc_mccfr.log'  # Specify the name of your log file
+    property = "Average game valueA:"
+    property = "Avg regretB:"
     avg_game_values = parse_log(log_file, property)
     is_log_scale = False
 
