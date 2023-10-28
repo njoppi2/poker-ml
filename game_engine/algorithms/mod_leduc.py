@@ -18,43 +18,26 @@ current_file_with_extension = os.path.basename(__file__)
 current_file_name = os.path.splitext(current_file_with_extension)[0]
 
 iterations = 1000
-use_3bet = True
 algorithm = 'mccfr'
 cards = [Card.Q, Card.Q, Card.K, Card.K, Card.A, Card.A]
-# cards = [1, 1, 2, 2, 3, 3]
-exploring_phase = 0.0
+exploring_phase = 0
+exploration_type = "cfr"
 
 """ Be careful when creating a model by playing against fixed strategies, because your model might not have all info_sets """
 fixed_strategyA = None
 fixed_strategyB = None
-# fixed_strategyA = 'leduc-Lma-mccfr-6cards-EP0_1-iter100000'
-# fixed_strategyB = 'leduc-ptM-Lma-mccfr-6cards-EP0_1-iter100000'
+# fixed_strategyA = 'Cyz-cfr-6cards-2maxbet-EPcfr0-mRW0_0001-iter10000'
+# fixed_strategyB = 'pbD-Cyz-mccfr-6cards-2maxbet-EPcfr0-mRW0_0001-iter100000'
 is_model_fixed = (fixed_strategyA is not None), (fixed_strategyB is not None)
 is_there_a_learning_model = not (is_model_fixed[0] and is_model_fixed[1])
-model_name = f'{algorithm}-{len(cards)}cards-EP{float_to_custom_string(exploring_phase)}-iter{iterations}'
+max_bet = 2
+min_reality_weight = 0.000
 
-
-
-if use_3bet:
-    # class Actions(Enum):
-    #     PASS = 0
-    #     BET4 = 1
-    #     BET3 = 2
-    #     BET2 = 3
-    #     BET1 = 4
-    # action_symbol = ['p', '4', '3', '2', '1']
-
-    class Actions(Enum):
-        PASS = 0
-        BET1 = 1
-        BET2 = 2
-    action_symbol = ['p', 'b', 'B']
-else:
-    class Actions(Enum):
-        PASS = 0
-        BET1 = 1
-    action_symbol = ['p','b']
-
+total_action_symbol = ['p', 'b', 'B', '3', '4', '5', '6', '7', '8', '9']
+model_name = f'{algorithm}-{len(cards)}cards-{max_bet}maxbet-EP{exploration_type}{float_to_custom_string(exploring_phase)}-mRW{float_to_custom_string(min_reality_weight)}-iter{iterations}'
+Actions = Enum('Actions', {'PASS': 0} | {f'BET{i}': i for i in range(1, max_bet + 1)})
+total_num_actions = len(Actions)
+action_symbol = total_action_symbol[:total_num_actions]
 class ModLeducTrainer:
     """
        The AI's wil play a version of Leduc Poker with 5 possible actions: pass, bet 1, bet 2, bet 3, and bet 4. 
@@ -130,10 +113,14 @@ class ModLeducTrainer:
             self.strategy = [0.0] * self.num_actions if strategy is None else strategy
             self.strategy_sum = [0.0] * self.num_actions
             self.times_regret_sum_updated = 0
+            self.times_strategy_sum_updated = 0
             self.times_action_got_positive_reward = [0] * self.num_actions
+            self.times_got_strategy_without_0_rw = 0
+            self.times_got_strategy_without_0_strat = 0
 
-        def get_strategy(self, realization_weight, is_exploring_phase, is_current_model_fixed):
+        def get_strategy(self, realization_weight, is_exploring_phase, is_current_model_fixed, info_set):
             """Turn sum of regrets into a probability distribution for actions."""
+            linear_strategy = False
             if not is_current_model_fixed:
                 # r = random.random()
                 # test_bad_actions = r < 0.05
@@ -143,8 +130,16 @@ class ModLeducTrainer:
                         self.strategy[i] = max(self.regret_sum[i], 0) / normalizing_sum
                     else:
                         self.strategy[i] = 1.0 / self.num_actions
-                    if not is_exploring_phase:
-                        self.strategy_sum[i] += realization_weight * self.strategy[i]
+                        linear_strategy = True
+                    if realization_weight != 0:
+                        self.times_got_strategy_without_0_rw += 1
+                    if self.strategy[i] != 0:
+                        self.times_got_strategy_without_0_strat += 1
+                    
+                    strategy_factor = min_reality_weight if linear_strategy else self.strategy[i]
+                    strategy_sum_increment = max(realization_weight, min_reality_weight) * strategy_factor
+                    self.strategy_sum[i] += strategy_sum_increment 
+                    self.times_strategy_sum_updated += bool(strategy_sum_increment)
             return self.strategy
         
         def get_action(self, strategy):
@@ -178,19 +173,19 @@ class ModLeducTrainer:
             formatted_avg_strategy = ""
             last_action_index = 0
             filled_columns = 0
-            for i in range(self.num_actions):
-                for _ in range(self.actions[i].value - last_action_index):
-                    formatted_avg_strategy += " "*13
-                    filled_columns += 1
-                formatted_avg_strategy += color_print(avg_strategy[i])
-                filled_columns += 1
-                last_action_index += 1
-            
-            for _ in range(len(Actions) - filled_columns):
-                formatted_avg_strategy += " "*13
+            column_length = " "*13
+            action_existence = [item in self.actions for item in Actions]
+            for i in range(len(action_existence)):
+                # a = self.actions[i].value
+                action_exists = action_existence[i]
+                if action_exists:
+                    formatted_avg_strategy += color_print(avg_strategy[last_action_index])
+                    last_action_index += 1
+                else:
+                    formatted_avg_strategy += column_length
 
             min_width_info_set = f"{self.info_set:<10}"  # Ensuring minimum 10 characters for self.info_set
-            return f"{min_width_info_set}: {formatted_avg_strategy} {self.times_regret_sum_updated}"
+            return f"{min_width_info_set}: {formatted_avg_strategy} {self.times_regret_sum_updated}  {self.times_strategy_sum_updated}  {self.times_got_strategy_without_0_rw}  {self.times_got_strategy_without_0_strat}"
         
         def __lt__(self, other):
             return self.info_set < other.info_set
@@ -210,14 +205,14 @@ class ModLeducTrainer:
         needs to be set again."""
         # cards.sort(key=lambda x: x.value)
 
-        print(f"Parameters: {iterations} iterations, {len(cards)} cards, {algorithm}, {exploring_phase} exploring phase\n")
+        print(f"Parameters: {model_name}\n")
 
         sum_of_rewards = [0] * 2
         """ p0 and p1 store, respectively, the probability of the player 0 and player 1 reaching the current node,
         from its "parent" node """
         p0 = 1
         p1 = 1
-        chips = 2
+        chips = total_num_actions - 1
         turn_bet_value = 1
         round_bet_value = 1
         played_current_phase = False
@@ -265,26 +260,24 @@ class ModLeducTrainer:
             final_avg_game_valueA = sum_of_rewards[0] / (iterations * (1 - exploring_phase))
 
         # if at least one of the players is not a fixed strategy, print their average strategy
-
         algorithm_id = generate_random_string(3)
         avg_game_valueA = sum_of_rewards[0] / iterations
         print(f"Average game value for {fixed_strategyA or algorithm_id} as p0: {avg_game_valueA}")
         avg_game_valueB = sum_of_rewards[1] / iterations
         print(f"Average game value for {fixed_strategyB or algorithm_id} as p0: {avg_game_valueB}")
         adversary_id = ''
+        adversary_name = ''
         if is_there_a_learning_model:
             if is_model_fixed[0]:
-                match = re.search(r'-(\w{3})', fixed_strategyA)
-                if match:
-                    adversary_id = '-' + match.group(1)
+                adversary_id = '-' + fixed_strategyA[:3]
+                adversary_name = fixed_strategyA
             elif is_model_fixed[1]:
-                match = re.search(r'-(\w{3})', fixed_strategyB)
-                if match:
-                    adversary_id = '-' + match.group(1)
+                adversary_id = '-' + fixed_strategyB[:3]
+                adversary_name = fixed_strategyB
 
             self.print_model(sum_of_rewards, iterations)
             pickle_name = f'{algorithm_id}{adversary_id}-{model_name}.pkl'
-            final_strategy_path = f'../analysis/blueprints/leduc-{pickle_name}'
+            final_strategy_path = f'../analysis/blueprints/{pickle_name}'
             create_file(final_strategy_path)
             node_dict = {}
             for n in sorted(self.node_map.values()):
@@ -294,7 +287,10 @@ class ModLeducTrainer:
             
         end_time = time.time()
         elapsed_time = end_time - start_time
-        print(f"{algorithm_id}{adversary_id} {model_name} took {elapsed_time} seconds to run.")
+        if adversary_name:
+            print(f'model was trained against: {adversary_name}')
+        if is_there_a_learning_model:
+            print(f"{algorithm_id}{adversary_id}-{model_name} took {elapsed_time} seconds to run.")
 
     def get_node(self, info_set, is_model_B, is_current_model_fixed, possible_actions=None):
         """Returns a node for the given information set. Creates the node if it doesn't exist."""
@@ -333,6 +329,8 @@ class ModLeducTrainer:
         updated_history = history + '/' if next_phase_started else history
         public_card = cards[2] if updated_phase == 'flop' else ""
         info_set = str(cards[player]) + str(public_card) + updated_history
+        explore_with_cfr = exploration_type == "cfr" and is_exploring_phase
+
         if possible_actions is None:
             return rewards
         
@@ -341,14 +339,13 @@ class ModLeducTrainer:
             assert player == 0
 
         node = self.get_node(info_set, is_model_B, is_current_model_fixed, possible_actions)
-
         if is_exploring_phase and not is_current_model_fixed:
             strategy = [1.0 / len(possible_actions)] * len(possible_actions)
         else:
-            strategy = node.get_strategy(p0 if player == 0 else p1, is_exploring_phase, is_current_model_fixed) 
+            strategy = node.get_strategy(p0 if player == 0 else p1, is_exploring_phase, is_current_model_fixed, info_set) 
         node_actions_utilities = [0.0] * len(possible_actions)
 
-        if algorithm == 'mccfr' or is_current_model_fixed:
+        if (algorithm == 'mccfr' and not explore_with_cfr) or is_current_model_fixed:
             other_actions = list(possible_actions)  # Get a list of actions in the order of the enum
             chosen_action = node.get_action(strategy)
             other_actions.remove(Actions(chosen_action))  # Remove the first action from the list
@@ -385,7 +382,7 @@ class ModLeducTrainer:
 
             return node_chosen_action_utility
         
-        elif algorithm == 'cfr':
+        elif explore_with_cfr or algorithm == 'cfr':
             node_util = 0
             for action in possible_actions:
                 action_index = node.actions.index(action)
@@ -399,6 +396,7 @@ class ModLeducTrainer:
                     action_index = node.actions.index(action)
                     regret = node_actions_utilities[action_index] - node_util
                     node.regret_sum[action_index] += (p1 if player == 0 else p0) * regret
+                node.times_regret_sum_updated += 1
 
             return node_util
 
