@@ -308,11 +308,11 @@ class ModLeducTrainer:
                 return self.node_mapA[info_set]
             
     def perform_action_wrapper(self, args):
-        (cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase, model_A_is_p0, alternative_play) = args
-        return self.perform_action(cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase, model_A_is_p0, alternative_play), action_index
+        (cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase, model_A_is_p0, is_call, alternative_play) = args
+        return self.perform_action(cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase, model_A_is_p0, is_call, alternative_play), action_index
 
-    def perform_action(self, cards, history, p0, p1, players, phase, strategy, player, action, action_index, is_exploring_phase, model_A_is_p0, alternative_play=None):
-        action_char = self.action_symbol[action['value']]
+    def perform_action(self, cards, history, p0, p1, players, phase, strategy, player, action, action_index, is_exploring_phase, model_A_is_p0, action_string, alternative_play=None):
+        action_char = action_string or self.action_symbol[action['value']]
         next_history = history + action_char
         # node_action_utility receives a negative values because we are alternating between players,
         # and in the Leduc Poker game, the reward for a player is the opposite of the other player's reward
@@ -325,18 +325,19 @@ class ModLeducTrainer:
 
     def nash_equilibrium_algorithm(self, cards, history, p0, p1, players, phase, is_exploring_phase, model_A_is_p0, alternative_play=None):
         # On the first iteration, the history is empty, so the first player starts
-        plays = len(history.replace("/", ""))
+        history_without_numbers = re.sub(r'\d', '', history)
+        plays = len(history_without_numbers.replace("/", ""))
         player = plays % 2
         opponent = 1 - player
         model_A_is_p0 == player
         is_model_B = player == model_A_is_p0
 
         is_current_model_fixed = self.is_model_fixed[is_model_B]
-        possible_actions, rewards, next_phase_started = get_possible_actions(history, cards, player, opponent, players, phase, self.Actions)
+        possible_actions, rewards, next_phase_started = get_possible_actions(history, cards, player, opponent, players, phase, self.Actions, 1)
         updated_phase = 'flop' if next_phase_started else phase
         updated_history = history + '/' if next_phase_started else history
-        public_card = cards[2] if updated_phase == 'flop' else ""
-        info_set = str(cards[player]) + str(public_card) + updated_history
+        public_card = f'/{cards[2]}' if updated_phase == 'flop' else ""
+        info_set = updated_history + ':|' + str(cards[player]) + str(public_card)
         explore_with_cfr = self.exploration_type == "cfr" and is_exploring_phase
 
         if possible_actions is None:
@@ -359,10 +360,10 @@ class ModLeducTrainer:
             other_actions.remove(chosen_action)  # Remove the first action from the list
             chosen_action_index = node.actions.index(chosen_action)
 
-            updated_players = set_bet_value(player, players, chosen_action["value"], next_phase_started)
+            updated_players, bet_result = set_bet_value(player, players, chosen_action["value"], next_phase_started)
 
             # Play chosen action according to the strategy
-            node_actions_utilities[chosen_action_index] = self.perform_action(cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, chosen_action, chosen_action_index, is_exploring_phase, model_A_is_p0, alternative_play)
+            node_actions_utilities[chosen_action_index] = self.perform_action(cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, chosen_action, chosen_action_index, is_exploring_phase, model_A_is_p0, bet_result, alternative_play)
 
             # Play for other actions
             if not is_current_model_fixed and alternative_play != opponent:
@@ -372,7 +373,7 @@ class ModLeducTrainer:
                         for action in other_actions:
                             action_index = node.actions.index(action)
                             is_chosen_action = action_index == chosen_action_index
-                            args = (cards, updated_history, p0, p1, set_bet_value(player, players, action["value"], next_phase_started), updated_phase, strategy, player, action, node.actions.index(action), is_exploring_phase, model_A_is_p0, alternative_play if is_chosen_action else player)
+                            args = (cards, updated_history, p0, p1, set_bet_value(player, players, action["value"], next_phase_started), updated_phase, strategy, player, action, node.actions.index(action), is_exploring_phase, model_A_is_p0, bet_result, alternative_play if is_chosen_action else player)
                             arguments.append(args)
                         results = executor.map(self.perform_action_wrapper, arguments)
                     # Process results
@@ -383,8 +384,8 @@ class ModLeducTrainer:
                     for action in other_actions:
                         action_index = node.actions.index(action)
                         # passar um parametro para mccfr dizendo que se é jogada alternativa, e de quê jogador, se for do jogador 1, ai não tem for na jogada do jogador 0
-                        updated_players = set_bet_value(player, players, action["value"], next_phase_started)
-                        node_action_utility = self.perform_action(cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase, model_A_is_p0, alternative_play=player)
+                        updated_players, bet_result = set_bet_value(player, players, action["value"], next_phase_started)
+                        node_action_utility = self.perform_action(cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase, model_A_is_p0, bet_result, alternative_play=player)
                         node_actions_utilities[action_index] = node_action_utility
 
                 for action in possible_actions:
@@ -405,8 +406,8 @@ class ModLeducTrainer:
             node_util = 0
             for action in possible_actions:
                 action_index = node.actions.index(action)
-                updated_players = set_bet_value(player, players, action["value"], next_phase_started)
-                node_action_utility = self.perform_action(cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase, model_A_is_p0)
+                updated_players, bet_result = set_bet_value(player, players, action["value"], next_phase_started)
+                node_action_utility = self.perform_action(cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase, model_A_is_p0, bet_result)
                 node_actions_utilities[action_index] = node_action_utility
                 node_util += strategy[action_index] * node_action_utility
 
@@ -438,9 +439,9 @@ if __name__ == "__main__":
     _fixed_strategyB = None
     # _fixed_strategyA = 'Cyz-cfr-6cards-2maxbet-EPcfr0-mRW0_0001-iter10000'
     # _fixed_strategyB = 'pbD-Cyz-mccfr-6cards-2maxbet-EPcfr0-mRW0_0001-iter100000'
-    max_bet = 3
+    max_bet = 11
 
-    total_action_symbol = ['p', 'b', 'B', '3', '4', '5', '6', '7', '8', '9', 'q']
+    total_action_symbol = ['p', 'b', 'B', '3', '4', '5', '6', '7', '8', '9', 'q', 'u', 'v']
     min_reality_weight = 0.000
     decrese_weight_of_initial_strategies = False
 

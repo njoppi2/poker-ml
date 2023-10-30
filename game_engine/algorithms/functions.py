@@ -63,10 +63,13 @@ class Card(Enum):
         return self.value < other.value
 
 
-def get_possible_actions(history, cards, player, opponent, players, phase, all_actions):
-    """Returns the reward if it's a terminal node, or the possible actions if it's not."""
-    def filter_actions(bet, my_chips):
-        return [action for action in all_actions if action['value'] == 0 or (action['value'] >= bet and action['value'] <= my_chips)]
+def get_possible_actions(history, cards, player, opponent, players, phase, all_actions, bb):
+    """Returns the reward if it's a terminal node, or the possible actions if it's not."""    
+    def filter_actions(relative_bet, my_chips):
+        return [
+            action for action in all_actions 
+            if action['value'] == 0 or action['value'] == relative_bet or (action['value'] >= max(bb, 2*relative_bet) and action['value'] <= my_chips)
+        ]
     
     def half(value):
         return value // 2
@@ -136,7 +139,14 @@ def set_bet_value(player, players, action_value, next_phase_started):
     new_players[player] = tuple(current_player)
     new_players[opponent] = tuple(opponent_player)
     assert current_player[CHIPS] >= 0
-    return tuple(new_players)
+
+    is_fold = action_value == 0 and current_player[ROUND_BET_VALUE] < opponent_player[ROUND_BET_VALUE]
+    is_check = action_value == 0
+    is_call = action_value > 0 and current_player[ROUND_BET_VALUE] == opponent_player[ROUND_BET_VALUE]
+    is_raise = action_value > 0 and current_player[ROUND_BET_VALUE] > opponent_player[ROUND_BET_VALUE]
+
+    result = 'k' if is_check else 'c' if is_call else 'f' if is_fold else f'r{current_player[ROUND_BET_VALUE]*100}' if is_raise else None
+    return tuple(new_players), result
 
 def create_json_from_pickle(pickle_file_path):
     with open(pickle_file_path, 'rb') as pickle_file:
