@@ -306,7 +306,8 @@ class ModLeducTrainer:
                 return self.node_mapA[info_set]
             
     def perform_action_wrapper(self, args):
-        return self.perform_action(*args)
+        (cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase, model_A_is_p0, alternative_play) = args
+        return self.perform_action(cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase, model_A_is_p0, alternative_play), action_index
 
     def perform_action(self, cards, history, p0, p1, players, phase, strategy, player, action, action_index, is_exploring_phase, model_A_is_p0, alternative_play=None):
         action_char = self.action_symbol[action.value]
@@ -354,25 +355,29 @@ class ModLeducTrainer:
             other_actions = list(possible_actions)  # Get a list of actions in the order of the enum
             chosen_action = node.get_action(strategy)
             other_actions.remove(self.Actions(chosen_action))  # Remove the first action from the list
-            action_index = node.actions.index(chosen_action)
+            chosen_action_index = node.actions.index(chosen_action)
 
             updated_players = set_bet_value(player, players, chosen_action, next_phase_started)
 
             # Play chosen action according to the strategy
-            node_chosen_action_utility = self.perform_action(cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, chosen_action, action_index, is_exploring_phase, model_A_is_p0, alternative_play)
-            node_actions_utilities[action_index] = node_chosen_action_utility
+            node_actions_utilities[chosen_action_index] = self.perform_action(cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, chosen_action, chosen_action_index, is_exploring_phase, model_A_is_p0, alternative_play)
 
             # Play for other actions
             if not is_current_model_fixed and alternative_play != opponent:
 
-                if plays <= 1:
+                if plays <= 2:
                     with ThreadPoolExecutor() as executor:
-                        arguments = [(cards, updated_history, p0, p1, set_bet_value(player, players, action, next_phase_started), updated_phase, strategy, player, action, node.actions.index(action), is_exploring_phase, model_A_is_p0, player) for action in other_actions]
+                        arguments = []
+                        for action in other_actions:
+                            action_index = node.actions.index(action)
+                            is_chosen_action = action_index == chosen_action_index
+                            args = (cards, updated_history, p0, p1, set_bet_value(player, players, action, next_phase_started), updated_phase, strategy, player, action, node.actions.index(action), is_exploring_phase, model_A_is_p0, alternative_play if is_chosen_action else player)
+                            arguments.append(args)
                         results = executor.map(self.perform_action_wrapper, arguments)
                     # Process results
                     for result in results:
-                        # Process each result
-                        node_actions_utilities[action_index] = result
+                        utility, index = result
+                        node_actions_utilities[index] = utility
                 else:
                     for action in other_actions:
                         action_index = node.actions.index(action)
@@ -383,7 +388,7 @@ class ModLeducTrainer:
 
                 for action in possible_actions:
                     action_index = node.actions.index(action)
-                    regret = node_actions_utilities[action_index] - node_chosen_action_utility
+                    regret = node_actions_utilities[action_index] - node_actions_utilities[chosen_action_index]
                     node.times_action_got_positive_reward[action_index] += (regret >= 0)
 
                     # if node.times_action_got_positive_reward[action_index] == node.times_regret_sum_updated and node.times_regret_sum_updated > 20 and action != self.Actions.PASS:
@@ -393,7 +398,7 @@ class ModLeducTrainer:
                     node.regret_sum[action_index] += (p1 if player == 0 else p0) * regret
                 node.times_regret_sum_updated += 1
 
-            return node_chosen_action_utility
+            return node_actions_utilities[chosen_action_index]
         
         elif explore_with_cfr or self.algorithm == 'cfr':
             node_util = 0
@@ -421,7 +426,7 @@ if __name__ == "__main__":
 
     random.seed(42)
 
-    _iterations = 10000
+    _iterations = 1000
     _algorithm = 'mccfr'
     cards = [Card.Q, Card.Q, Card.K, Card.K, Card.A, Card.A]
     _exploring_phase = 0
