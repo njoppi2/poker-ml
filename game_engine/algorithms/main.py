@@ -19,7 +19,7 @@ fixed_strategyB = None
 max_bet = 2
 
 total_action_symbol = ['p', 'b', 'B', '3', '4', '5', '6', '7', '8', '9']
-min_reality_weight = 0.000
+min_reality_weight = 0.0001
 decrese_weight_of_initial_strategies = False
 
-trainer = ModLeducTrainer(iterations, algorithm, cards, exploring_phase, exploration_type, total_action_symbol, min_reality_weight, decrese_weight_of_initial_strategies, fixed_strategyA, fixed_strategyB)
+trainer = ModLeducTrainer(iterations, algorithm, cards, exploring_phase, exploration_type, total_action_symbol, min_reality_weight, decrese_weight_of_initial_strategies, max_bet, fixed_strategyA, fixed_strategyB)
