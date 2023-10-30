@@ -9,6 +9,7 @@ import pickle
 import multiprocessing
 import re
 from types import MappingProxyType
+from concurrent.futures import ThreadPoolExecutor
 
 
 # num_processes = multiprocessing.cpu_count()
@@ -33,7 +34,7 @@ class ModLeducTrainer:
     """
     # How can we handle situations where not all actions are alowed?
 
-    def __init__(self, iterations, algorithm, cards, exploring_phase, exploration_type, total_action_symbol, min_reality_weight, decrese_weight_of_initial_strategies, fixed_strategyA=None, fixed_strategyB=None):
+    def __init__(self, iterations, algorithm, cards, exploring_phase, exploration_type, total_action_symbol, min_reality_weight, decrese_weight_of_initial_strategies, max_bet, fixed_strategyA=None, fixed_strategyB=None):
         self.node_map = {}
         self.node_mapA = self.node_map
         self.node_mapB = self.node_map
@@ -46,7 +47,7 @@ class ModLeducTrainer:
         self.exploration_type = exploration_type
         self.fixed_strategyA = fixed_strategyA
         self.fixed_strategyB = fixed_strategyB
-        self.max_bet = 2
+        self.max_bet = max_bet
         self.model_name = f'{self.algorithm}-{len(self.cards)}cards-{self.max_bet}maxbet-EP{self.exploration_type}{float_to_custom_string(self.exploring_phase)}-mRW{float_to_custom_string(min_reality_weight)}-iter{self.iterations}'
 
         self.is_model_fixed = (fixed_strategyA is not None), (fixed_strategyB is not None)
@@ -303,7 +304,9 @@ class ModLeducTrainer:
                 return self.node_mapB[info_set]
             else:
                 return self.node_mapA[info_set]
-
+            
+    def perform_action_wrapper(self, args):
+        return self.perform_action(*args)
 
     def perform_action(self, cards, history, p0, p1, players, phase, strategy, player, action, action_index, is_exploring_phase, model_A_is_p0, alternative_play=None):
         action_char = self.action_symbol[action.value]
@@ -361,15 +364,23 @@ class ModLeducTrainer:
 
             # Play for other actions
             if not is_current_model_fixed and alternative_play != opponent:
-                for action in other_actions:
-                    action_index = node.actions.index(action)
-                    # passar um parametro para mccfr dizendo que se é jogada alternativa, e de quê jogador, se for do jogador 1, ai não tem for na jogada do jogador 0
-                    updated_players = set_bet_value(player, players, action, next_phase_started)
-                    node_action_utility = self.perform_action(cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase, model_A_is_p0, alternative_play=player)
-                    node_actions_utilities[action_index] = node_action_utility
 
-                # if len(info_set) > 1 and info_set[0] == info_set[1]:
-                #     print('j')
+                if plays <= 1:
+                    with ThreadPoolExecutor() as executor:
+                        arguments = [(cards, updated_history, p0, p1, set_bet_value(player, players, action, next_phase_started), updated_phase, strategy, player, action, node.actions.index(action), is_exploring_phase, model_A_is_p0, player) for action in other_actions]
+                        results = executor.map(self.perform_action_wrapper, arguments)
+                    # Process results
+                    for result in results:
+                        # Process each result
+                        node_actions_utilities[action_index] = result
+                else:
+                    for action in other_actions:
+                        action_index = node.actions.index(action)
+                        # passar um parametro para mccfr dizendo que se é jogada alternativa, e de quê jogador, se for do jogador 1, ai não tem for na jogada do jogador 0
+                        updated_players = set_bet_value(player, players, action, next_phase_started)
+                        node_action_utility = self.perform_action(cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase, model_A_is_p0, alternative_play=player)
+                        node_actions_utilities[action_index] = node_action_utility
+
                 for action in possible_actions:
                     action_index = node.actions.index(action)
                     regret = node_actions_utilities[action_index] - node_chosen_action_utility
@@ -410,7 +421,7 @@ if __name__ == "__main__":
 
     random.seed(42)
 
-    _iterations = 2000
+    _iterations = 10000
     _algorithm = 'mccfr'
     cards = [Card.Q, Card.Q, Card.K, Card.K, Card.A, Card.A]
     _exploring_phase = 0
@@ -427,4 +438,4 @@ if __name__ == "__main__":
     min_reality_weight = 0.000
     decrese_weight_of_initial_strategies = False
 
-    trainer = ModLeducTrainer(_iterations, _algorithm, cards, _exploring_phase, _exploration_type, total_action_symbol, min_reality_weight, decrese_weight_of_initial_strategies, _fixed_strategyA, _fixed_strategyB)
+    trainer = ModLeducTrainer(_iterations, _algorithm, cards, _exploring_phase, _exploration_type, total_action_symbol, min_reality_weight, decrese_weight_of_initial_strategies, max_bet, _fixed_strategyA, _fixed_strategyB)
