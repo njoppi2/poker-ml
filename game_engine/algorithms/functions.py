@@ -66,7 +66,7 @@ class Card(Enum):
 def get_possible_actions(history, cards, player, opponent, players, phase, all_actions):
     """Returns the reward if it's a terminal node, or the possible actions if it's not."""
     def filter_actions(bet, my_chips):
-        return [action for action in all_actions if action.value == 0 or (action.value >= bet and action.value <= my_chips)]
+        return [action for action in all_actions if action['value'] == 0 or (action['value'] >= bet and action['value'] <= my_chips)]
     
     def half(value):
         return value // 2
@@ -120,15 +120,15 @@ def get_possible_actions(history, cards, player, opponent, players, phase, all_a
     raise Exception("Action or reward not found for history: " + history)
 
 
-def set_bet_value(player, players, action, next_phase_started):
+def set_bet_value(player, players, action_value, next_phase_started):
     opponent = 1 - player
     new_players = list(players)
     current_player = list(players[player])
     opponent_player = list(players[opponent])
     
-    current_player[CHIPS] -= action.value
-    current_player[TURN_BET_VALUE] = action.value
-    current_player[ROUND_BET_VALUE] += action.value
+    current_player[CHIPS] -= action_value
+    current_player[TURN_BET_VALUE] = action_value
+    current_player[ROUND_BET_VALUE] += action_value
     current_player[PLAYED_CURRENT_PHASE] = True
     if next_phase_started:
         opponent_player[PLAYED_CURRENT_PHASE] = False
