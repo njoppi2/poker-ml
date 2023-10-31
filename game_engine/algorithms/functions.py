@@ -51,29 +51,38 @@ def generate_random_string(length):
     letters = string.ascii_letters
     return ''.join(random.choice(letters) for _ in range(length))
 
-class Card(Enum):
-    Q = 1
-    K = 2
-    A = 3
-
-    def __str__(self):
-        return self.name
-    
-    def __lt__(self, other):
-        return self.value < other.value
-
-
-def get_possible_actions(history, cards, player, opponent, players, phase, all_actions, bb):
+def get_possible_actions(history, cards, player, opponent, players, phase, all_actions, bb, total_chips, is_bet_relative):
     """Returns the reward if it's a terminal node, or the possible actions if it's not."""    
-    def filter_actions(relative_bet, my_chips):
-        return [
-            action for action in all_actions 
-            if action['value'] == 0 or action['value'] == relative_bet or (action['value'] >= max(bb, 2*relative_bet) and action['value'] <= my_chips)
-        ]
+    my_previous_bets = players[player][ROUND_BET_VALUE]
+    bet_difference_to_continue = players[opponent][ROUND_BET_VALUE] - my_previous_bets
+
+    def is_action_legal(action, relative_bet, bb, my_chips):
+        assert relative_bet >= 0
+        value = action['value']
+        is_pass_or_all_win = value == 0 or value == total_chips
+
+        if my_chips == 0:
+            return value == 0
+        
+        if is_bet_relative:
+            return value == 0 or value == relative_bet or value == my_chips or (value >= max(bb, 2*relative_bet) and value <= my_chips)
+        else:
+            if relative_bet == 0:
+                # return value == 0 or (value >= bb and value <= my_chips)
+                return is_pass_or_all_win or value >= bb + my_previous_bets
+            else:
+                total_bet = my_previous_bets + relative_bet
+                assert total_bet >= bb + my_previous_bets
+                # min_reraise = players[player][ROUND_BET_VALUE] + 2*relative_bet
+                # all_win = players[player][CHIPS] + total_bet
+                # return value == 0 or value == relative_bet or (value >= 2*relative_bet and value <= my_chips)
+                return is_pass_or_all_win or value == total_bet or (value >= my_previous_bets + 2*relative_bet)
     
+    def filter_actions(relative_bet, my_chips):
+        return [action for action in all_actions if is_action_legal(action, relative_bet, bb, my_chips)]
+
     def half(value):
         return value // 2
-    min_bet_to_continue = players[opponent][ROUND_BET_VALUE] - players[player][ROUND_BET_VALUE]
     
     def result_multiplier():
         if cards[player] == cards[2]:
@@ -88,24 +97,24 @@ def get_possible_actions(history, cards, player, opponent, players, phase, all_a
             # cards[player] == cards[opponent]
             return 0
         
-    if min_bet_to_continue < 0:
+    if bet_difference_to_continue < 0:
         # The opponent folded
         my_bet_total = players[player][ROUND_BET_VALUE]
         opponent_bet_total = players[opponent][ROUND_BET_VALUE]
-        total_bet = my_bet_total + opponent_bet_total + min_bet_to_continue
+        total_bet = my_bet_total + opponent_bet_total + bet_difference_to_continue
         return None, half(total_bet), False
     
-    if not players[player][PLAYED_CURRENT_PHASE] and min_bet_to_continue == 0:
+    if not players[player][PLAYED_CURRENT_PHASE] and bet_difference_to_continue == 0:
         possible_actions = filter_actions(0, players[player][CHIPS])
         return possible_actions, None, False
     
-    if players[player][PLAYED_CURRENT_PHASE] and min_bet_to_continue == 0:
+    if players[player][PLAYED_CURRENT_PHASE] and bet_difference_to_continue == 0:
         if phase == 'preflop':
             # if player 0 would end pre-flop, then the second player would start the flop, which is not what we want
             if player == 1:
                 possible_actions = filter_actions(0, 0)
                 return possible_actions, None, False
-            possible_actions = filter_actions(min_bet_to_continue, players[player][CHIPS])
+            possible_actions = filter_actions(bet_difference_to_continue, players[player][CHIPS])
             assert players[player][ROUND_BET_VALUE] == players[opponent][ROUND_BET_VALUE]
             return possible_actions, None, True
         else:
@@ -116,26 +125,36 @@ def get_possible_actions(history, cards, player, opponent, players, phase, all_a
             assert my_bet_total == opponent_bet_total
             return None, half(total_bet * result_multiplier()), False
         
-    if min_bet_to_continue > 0:
-        possible_actions = filter_actions(min_bet_to_continue, players[player][CHIPS])
+    if bet_difference_to_continue > 0:
+        possible_actions = filter_actions(bet_difference_to_continue, players[player][CHIPS])
         return possible_actions, None, False
     
     raise Exception("Action or reward not found for history: " + history)
 
 
-def set_bet_value(player, players, action_value, next_phase_started):
+def set_bet_value(player, players, action_value, next_phase_started, is_bet_relative, possible_actions):
     opponent = 1 - player
     new_players = list(players)
     current_player = list(players[player])
     opponent_player = list(players[opponent])
-    
-    current_player[CHIPS] -= action_value
-    current_player[TURN_BET_VALUE] = action_value
-    current_player[ROUND_BET_VALUE] += action_value
+    is_filler_play = False
+    if len(possible_actions) == 1:
+        assert possible_actions[0]['value'] == 0
+        is_filler_play = True
+
+    if is_bet_relative:    
+        current_player[CHIPS] -= action_value
+        current_player[TURN_BET_VALUE] = action_value
+        current_player[ROUND_BET_VALUE] += action_value
+    else:
+        my_round_bet_total = action_value or current_player[ROUND_BET_VALUE]
+        current_player[CHIPS] -= my_round_bet_total - current_player[ROUND_BET_VALUE]
+        current_player[TURN_BET_VALUE] = my_round_bet_total - current_player[ROUND_BET_VALUE]
+        current_player[ROUND_BET_VALUE] = my_round_bet_total
+
     current_player[PLAYED_CURRENT_PHASE] = True
     if next_phase_started:
         opponent_player[PLAYED_CURRENT_PHASE] = False
-
     new_players[player] = tuple(current_player)
     new_players[opponent] = tuple(opponent_player)
     assert current_player[CHIPS] >= 0
@@ -145,7 +164,7 @@ def set_bet_value(player, players, action_value, next_phase_started):
     is_call = action_value > 0 and current_player[ROUND_BET_VALUE] == opponent_player[ROUND_BET_VALUE]
     is_raise = action_value > 0 and current_player[ROUND_BET_VALUE] > opponent_player[ROUND_BET_VALUE]
 
-    result = 'k' if is_check else 'c' if is_call else 'f' if is_fold else f'r{current_player[ROUND_BET_VALUE]*100}' if is_raise else None
+    result = '-' if is_filler_play else 'k' if is_check else 'c' if is_call else 'f' if is_fold else f'r{action_value*100}' if is_raise else None
     return tuple(new_players), result
 
 def create_json_from_pickle(pickle_file_path):
@@ -159,4 +178,4 @@ def create_json_from_pickle(pickle_file_path):
 
 
 if __name__ == "__main__":
-    create_json_from_pickle('../analysis/blueprints/leduc-vof-mccfr-6cards-EP0_1-iter100000.pkl')
+    create_json_from_pickle('../analysis/blueprints/OMC-mccfr-6cards-12maxbet-EPcfr0_0-mRW0_0-iter500.pkl')
