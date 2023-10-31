@@ -301,9 +301,7 @@ class ModLeducTrainer:
             updated_players, bet_result = set_bet_value(player, players, chosen_action["value"], next_phase_started, self.is_bet_relative, possible_actions)
 
             make_alt_plays = not is_current_model_fixed and alternative_play != opponent
-            actions_to_iterate = [chosen_action]
-            if make_alt_plays:
-                actions_to_iterate += other_actions
+            actions_to_iterate = possible_actions if make_alt_plays else [chosen_action]
             
             # Play actions
             if plays <= -1: # wont create the node_history_map correctly, we could maybe use this after the tree was already created.
