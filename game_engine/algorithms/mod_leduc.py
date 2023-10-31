@@ -300,38 +300,40 @@ class ModLeducTrainer:
 
             updated_players, bet_result = set_bet_value(player, players, chosen_action["value"], next_phase_started, self.is_bet_relative, possible_actions)
 
-            # chosen_node_history_mapA, chosen_node_history_mapB = self.create_history_node(node_history_mapA, node_history_mapB, bet_result)
-            chosen_node_history_mapA, chosen_node_history_mapB = 0,0
-            # Play chosen action according to the strategy
-            node_actions_utilities[chosen_action_index] = self.perform_action(cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, chosen_action, chosen_action_index, is_exploring_phase, model_A_is_p0, bet_result, alternative_play, chosen_node_history_mapA, chosen_node_history_mapB)
-
-            # Play for other actions
-            if not is_current_model_fixed and alternative_play != opponent:
-                if plays <= -1:
-                    with ProcessPoolExecutor() as executor:
-                        arguments = []
-                        for action in other_actions:
-                            action_index = node.actions.index(action)
-                            is_chosen_action = action_index == chosen_action_index
-                            # other_node_history_mapA, other_node_history_mapB = self.create_history_node(node_history_mapA, node_history_mapB, bet_result)
-                            other_node_history_mapA, other_node_history_mapB = 0,0
-                            args = (cards, updated_history, p0, p1, set_bet_value(player, players, action["value"], next_phase_started, self.is_bet_relative, possible_actions), updated_phase, strategy, player, action, node.actions.index(action), is_exploring_phase, model_A_is_p0, bet_result, alternative_play if is_chosen_action else player, other_node_history_mapA, other_node_history_mapB)
-                            arguments.append(args)
-                        results = executor.map(self.perform_action_wrapper, arguments)
-                    # Process results
-                    for result in results:
-                        utility, index = result
-                        node_actions_utilities[index] = utility
-                else:
-                    for action in other_actions:
+            make_alt_plays = not is_current_model_fixed and alternative_play != opponent
+            actions_to_iterate = [chosen_action]
+            if make_alt_plays:
+                actions_to_iterate += other_actions
+            
+            # Play actions
+            if plays <= -1: # wont create the node_history_map correctly, we could maybe use this after the tree was already created.
+                with ProcessPoolExecutor() as executor:
+                    arguments = []
+                    for action in actions_to_iterate:
                         action_index = node.actions.index(action)
-                        # passar um parametro para mccfr dizendo que se é jogada alternativa, e de quê jogador, se for do jogador 1, ai não tem for na jogada do jogador 0
+                        is_chosen_action = action_index == chosen_action_index
                         # other_node_history_mapA, other_node_history_mapB = self.create_history_node(node_history_mapA, node_history_mapB, bet_result)
                         other_node_history_mapA, other_node_history_mapB = 0,0
                         updated_players, bet_result = set_bet_value(player, players, action["value"], next_phase_started, self.is_bet_relative, possible_actions)
-                        node_action_utility = self.perform_action(cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase, model_A_is_p0, bet_result, player, other_node_history_mapA, other_node_history_mapB)
-                        node_actions_utilities[action_index] = node_action_utility
+                        args = (cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase, model_A_is_p0, bet_result, alternative_play if is_chosen_action else player, other_node_history_mapA, other_node_history_mapB)
+                        arguments.append(args)
+                    results = executor.map(self.perform_action_wrapper, arguments)
+                # Process results
+                for result in results:
+                    utility, index = result
+                    node_actions_utilities[index] = utility
+            else:
+                for action in actions_to_iterate:
+                    action_index = node.actions.index(action)
+                    is_chosen_action = action_index == chosen_action_index
+                    # other_node_history_mapA, other_node_history_mapB = self.create_history_node(node_history_mapA, node_history_mapB, bet_result)
+                    other_node_history_mapA, other_node_history_mapB = 0,0
+                    updated_players, bet_result = set_bet_value(player, players, action["value"], next_phase_started, self.is_bet_relative, possible_actions)
+                    args = (cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase, model_A_is_p0, bet_result, alternative_play if is_chosen_action else player, other_node_history_mapA, other_node_history_mapB)
+                    node_action_utility = self.perform_action(*args)
+                    node_actions_utilities[action_index] = node_action_utility
 
+            if make_alt_plays:
                 for action in possible_actions:
                     action_index = node.actions.index(action)
                     regret = node_actions_utilities[action_index] - node_actions_utilities[chosen_action_index]
