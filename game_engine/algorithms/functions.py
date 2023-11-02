@@ -7,8 +7,7 @@ import pickle
 import json
 import random
 import string
-
-CHIPS, TURN_BET_VALUE, ROUND_BET_VALUE, PLAYED_CURRENT_PHASE = range(4)
+from utils import CHIPS, TURN_BET_VALUE, PHASE_BET_VALUE, ROUND_BET_VALUE, PLAYED_CURRENT_PHASE
 
 def color_print(value):
     r, g, b = (255, 255, 255)
@@ -51,86 +50,6 @@ def generate_random_string(length):
     letters = string.ascii_letters
     return ''.join(random.choice(letters) for _ in range(length))
 
-def get_possible_actions(history, cards, player, opponent, players, phase, all_actions, bb, total_chips, is_bet_relative):
-    """Returns the reward if it's a terminal node, or the possible actions if it's not."""    
-    my_previous_bets = players[player][ROUND_BET_VALUE]
-    bet_difference_to_continue = players[opponent][ROUND_BET_VALUE] - my_previous_bets
-
-    def is_action_legal(action, relative_bet, bb, my_chips):
-        assert relative_bet >= 0
-        value = action['value']
-        is_pass_or_all_win = value == 0 or value == total_chips
-
-        if my_chips == 0:
-            return value == 0
-        
-        if is_bet_relative:
-            return value == 0 or value == relative_bet or value == my_chips or (value >= max(bb, 2*relative_bet) and value <= my_chips)
-        else:
-            if relative_bet == 0:
-                # return value == 0 or (value >= bb and value <= my_chips)
-                return is_pass_or_all_win or value >= bb + my_previous_bets
-            else:
-                total_bet = my_previous_bets + relative_bet
-                assert total_bet >= bb + my_previous_bets
-                # min_reraise = players[player][ROUND_BET_VALUE] + 2*relative_bet
-                # all_win = players[player][CHIPS] + total_bet
-                # return value == 0 or value == relative_bet or (value >= 2*relative_bet and value <= my_chips)
-                return is_pass_or_all_win or value == total_bet or (value >= my_previous_bets + 2*relative_bet)
-    
-    def filter_actions(relative_bet, my_chips):
-        return [action for action in all_actions if is_action_legal(action, relative_bet, bb, my_chips)]
-
-    def half(value):
-        return value // 2
-    
-    def result_multiplier():
-        if cards[player] == cards[2]:
-            return 1
-        elif cards[opponent] == cards[2]:
-            return -1
-        elif cards[player] > cards[opponent]:
-            return 1
-        elif cards[player] < cards[opponent]:
-            return -1
-        else:
-            # cards[player] == cards[opponent]
-            return 0
-        
-    if bet_difference_to_continue < 0:
-        # The opponent folded
-        my_bet_total = players[player][ROUND_BET_VALUE]
-        opponent_bet_total = players[opponent][ROUND_BET_VALUE]
-        total_bet = my_bet_total + opponent_bet_total + bet_difference_to_continue
-        return None, half(total_bet), False
-    
-    if not players[player][PLAYED_CURRENT_PHASE] and bet_difference_to_continue == 0:
-        possible_actions = filter_actions(0, players[player][CHIPS])
-        return possible_actions, None, False
-    
-    if players[player][PLAYED_CURRENT_PHASE] and bet_difference_to_continue == 0:
-        if phase == 'preflop':
-            # if player 0 would end pre-flop, then the second player would start the flop, which is not what we want
-            if player == 1:
-                possible_actions = filter_actions(0, 0)
-                return possible_actions, None, False
-            possible_actions = filter_actions(bet_difference_to_continue, players[player][CHIPS])
-            assert players[player][ROUND_BET_VALUE] == players[opponent][ROUND_BET_VALUE]
-            return possible_actions, None, True
-        else:
-            # Showdown
-            my_bet_total = players[player][ROUND_BET_VALUE]
-            opponent_bet_total = players[opponent][ROUND_BET_VALUE]
-            total_bet = my_bet_total + opponent_bet_total
-            assert my_bet_total == opponent_bet_total
-            return None, half(total_bet * result_multiplier()), False
-        
-    if bet_difference_to_continue > 0:
-        possible_actions = filter_actions(bet_difference_to_continue, players[player][CHIPS])
-        return possible_actions, None, False
-    
-    raise Exception("Action or reward not found for history: " + history)
-
 
 def set_bet_value(player, players, action_value, next_phase_started, is_bet_relative, possible_actions):
     opponent = 1 - player
@@ -164,7 +83,7 @@ def set_bet_value(player, players, action_value, next_phase_started, is_bet_rela
     is_call = action_value > 0 and current_player[ROUND_BET_VALUE] == opponent_player[ROUND_BET_VALUE]
     is_raise = action_value > 0 and current_player[ROUND_BET_VALUE] > opponent_player[ROUND_BET_VALUE]
 
-    result = '-' if is_filler_play else 'k' if is_check else 'c' if is_call else 'f' if is_fold else f'r{action_value*100}' if is_raise else None
+    result = '-' if is_filler_play else 'f' if is_fold else 'k' if is_check else 'c' if is_call else f'r{action_value*100}' if is_raise else None
     return tuple(new_players), result
 
 def create_json_from_pickle(pickle_file_path):
@@ -175,6 +94,16 @@ def create_json_from_pickle(pickle_file_path):
 
     with open(json_file_path, 'w') as json_file:
         json.dump(node_dict, json_file, indent=4, sort_keys=True)
+
+def get_phase(phase, player, players):
+    my_previous_bets = players[player][ROUND_BET_VALUE]
+    opponent = 1 - player
+    bet_difference_to_continue = players[opponent][ROUND_BET_VALUE] - my_previous_bets
+    if players[player][PLAYED_CURRENT_PHASE] and bet_difference_to_continue == 0:
+        if phase == 'preflop':
+            return 'flop'
+    else:
+        return phase
 
 
 if __name__ == "__main__":
