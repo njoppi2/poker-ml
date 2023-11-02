@@ -1,0 +1,160 @@
+Iteration: 0
+Average game valueA: 10
+Avg regretA: -0.0911372879889235
+
+Iteration: 100000
+Average game valueA: 3
+Avg regretA: -0.0002751133951374499
+
+Iteration: 200000
+Average game valueA: 0
+Avg regretA: -0.00028687727523890594
+
+Iteration: 300000
+Average game valueA: -1
+Avg regretA: -0.0002897846341956643
+
+Iteration: 400000
+Average game valueA: -1
+Avg regretA: -0.00029331920307182493
+
+Iteration: 500000
+Average game valueA: 1
+Avg regretA: -0.00029512153018190903
+
+Iteration: 600000
+Average game valueA: -1
+Avg regretA: -0.00029927740127086975
+
+Iteration: 700000
+Average game valueA: 2
+Avg regretA: -0.0003015580748565828
+
+Iteration: 800000
+Average game valueA: -1
+Avg regretA: -0.0003021558016032539
+
+Iteration: 900000
+Average game valueA: 1
+Avg regretA: -0.00030026006512020497
+
+Iteration: 1000000
+Average game valueA: 1
+Avg regretA: -0.0003009432475259339
+
+Iteration: 1100000
+Average game valueA: 0
+Avg regretA: -0.00029973088785802116
+
+Iteration: 1200000
+Average game valueA: 3
+Avg regretA: -0.00029908292572053375
+
+Iteration: 1300000
+Average game valueA: -1
+Avg regretA: -0.00029745277123045105
+
+Iteration: 1400000
+Average game valueA: 1
+Avg regretA: -0.00029605292367797904
+
+Iteration: 1500000
+Average game valueA: -2
+Avg regretA: -0.00029456171149074364
+
+Iteration: 1600000
+Average game valueA: -1
+Avg regretA: -0.00029455588419977584
+
+Iteration: 1700000
+Average game valueA: -1
+Avg regretA: -0.0002949432997014129
+
+Iteration: 1800000
+Average game valueA: 1
+Avg regretA: -0.0002947337816015512
+
+Iteration: 1900000
+Average game valueA: 3
+Avg regretA: -0.00029419299773831285
+
+Iteration: 2000000
+Average game valueA: 1
+Avg regretA: -0.00029427583048748763
+
+Iteration: 2100000
+Average game valueA: -1
+Avg regretA: -0.0002944415722250763
+
+Iteration: 2200000
+Average game valueA: 1
+Avg regretA: -0.0002943615425326952
+
+Iteration: 2300000
+Average game valueA: 4
+Avg regretA: -0.0002934079120549646
+
+Iteration: 2400000
+Average game valueA: -1
+Avg regretA: -0.0002930853954913558
+
+Iteration: 2500000
+Average game valueA: 3
+Avg regretA: -0.0002930862754988737
+
+Iteration: 2600000
+Average game valueA: -1
+Avg regretA: -0.0002932684801038014
+
+Iteration: 2700000
+Average game valueA: -1
+Avg regretA: -0.0002934283335627849
+
+Iteration: 2800000
+Average game valueA: -1
+Avg regretA: -0.000294175591078632
+
+Iteration: 2900000
+Average game valueA: -1
+Avg regretA: -0.00029457626344653554
+
+Iteration: 3000000
+Average game valueA: -3
+Avg regretA: -0.000295326147028546
+
+Iteration: 3100000
+Average game valueA: -1
+Avg regretA: -0.0002958696196513499
+
+Iteration: 3200000
+Average game valueA: 1
+Avg regretA: -0.0002961933585181064
+
+Iteration: 3300000
+Average game valueA: 1
+Avg regretA: -0.0002967941527126679
+
+Iteration: 3400000
+Average game valueA: -1
+Avg regretA: -0.00029699452856931714
+
+Iteration: 3500000
+Average game valueA: -1
+Avg regretA: -0.0002971529062801627
+
+Iteration: 3600000
+Average game valueA: 1
+Avg regretA: -0.00029786882073049535
+
+Iteration: 3700000
+Average game valueA: -1
+Avg regretA: -0.0002978355728270542
+
+Iteration: 3800000
+Average game valueA: -1
+Avg regretA: -0.0002973800724000648
+
+Iteration: 3900000
+Average game valueA: -1
+Avg regretA: -0.00029714718250939713
+
