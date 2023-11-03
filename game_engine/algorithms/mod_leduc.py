@@ -12,7 +12,7 @@ import re
 from types import MappingProxyType
 from concurrent.futures import ProcessPoolExecutor
 
-
+total_regret_sum = 0
 # num_processes = multiprocessing.cpu_count()
 # pool = multiprocessing.Pool(processes=num_processes)  # Create a Pool of worker processes
 
@@ -163,24 +163,26 @@ class ModLeducTrainer:
                 sum_of_rewards[0] = model_A_is_p0 * (iteration_reward * (not is_exploring_phase))
                 sum_of_rewards[1] += (not model_A_is_p0) * (iteration_reward * (not is_exploring_phase))
                 
-                if i % 100000 == 0: #quando fazer o log
-                    avg_regret = 0
-                    for n in self.node_history_mapA.values():
-                        avg_regret += sum(n.regret_sum)
-                    for n in self.node_history_mapB.values():
-                        avg_regret += sum(n.regret_sum)
-                    avg_regret /= (len(self.node_history_mapA.values()) + len(self.node_history_mapB.values())) * (i+1)
+                if i % 1 == 0: #quando fazer o log
+                    # avg_regret = 0
+                    # for n in self.node_history_mapA.values():
+                    #     avg_regret += sum(n.regret_sum)
+                    # for n in self.node_history_mapB.values():
+                    #     avg_regret += sum(n.regret_sum)
+                    # avg_regret2 = sum((sum(n.regret_sum) / len(n.regret_sum)) for n in self.node_history_mapA.values()) / (len(self.node_history_mapA.values()) * total_iteration)
+                    
                     sample_iteration = {
                         'index': i,
                         'avg_game_valueA': final_avg_game_valueA or sum_of_rewards[0], #/ max((i + 1) - self.exploring_phase * iterations, 1),
                         # 'avg_game_valueB': sum_of_rewards[1] / max((i + 1) - self.exploring_phase * iterations, 1),
-                        'avg_regretA': sum((sum(n.regret_sum) / len(n.regret_sum)) for n in self.node_history_mapA.values()) / (len(self.node_history_mapA.values()) * total_iteration),
+                        # 'avg_regretA': avg_regret2
+                        'avg_regretA': total_regret_sum / (len(self.node_history_mapA.values()) * total_iteration)
                         # 'avg_regretB': sum((sum(n.regret_sum) / len(n.regret_sum)) for n in self.node_history_mapB.values()) / (len(self.node_history_mapB.values()) * total_iteration),
                     }
-                    print("iteration: ", i)
                     self.logger.info('', extra=sample_iteration)
 
                 if i % 400000 == 0: #quando fazer o pkl
+                    print("iteration: ", i)
                     pickle_name = f'{self.model_name}-it{i}.pkl'
                     iteration_strategy_path = f'../analysis/strategy_snapshots/{pickle_name}'
                     create_file(iteration_strategy_path)
@@ -209,7 +211,7 @@ class ModLeducTrainer:
                 adversary_id = '-' + self.fixed_strategyB[:3]
                 adversary_name = self.fixed_strategyB
 
-            self.print_model(self.Actions, sum_of_rewards, iterations)
+            # self.print_model(self.Actions, sum_of_rewards, iterations)
             pickle_name = f'{algorithm_id}{adversary_id}-{self.model_name}.pkl'
             final_strategy_path = f'../analysis/blueprints/{pickle_name}'
             create_file(final_strategy_path)
@@ -269,6 +271,7 @@ class ModLeducTrainer:
 
     def nash_equilibrium_algorithm(self, cards, history, p0, p1, players, phase, is_exploring_phase, model_A_is_p0, alternative_play, node_history_mapA, node_history_mapB):
         # On the first iteration, the history is empty, so the first player starts
+        global total_regret_sum
         history_without_numbers = re.sub(r'\d', '', history)
         plays = len(history_without_numbers.replace("/", ""))
         player = plays % 2
@@ -350,7 +353,9 @@ class ModLeducTrainer:
                     #     node.regret_sum[action_index] += (p1 if player == 0 else p0) * regret * 2
                     # else:
                     #     node.regret_sum[action_index] += (p1 if player == 0 else p0) * regret
-                    node.regret_sum[action_index] += (p1 if player == 0 else p0) * regret
+                    regret_update = (p1 if player == 0 else p0) * regret
+                    node.regret_sum[action_index] += regret_update
+                    total_regret_sum += regret_update
                 node.times_regret_sum_updated += 1
 
             return node_actions_utilities[chosen_action_index]
@@ -370,7 +375,9 @@ class ModLeducTrainer:
                 for action in possible_actions:
                     action_index = node.actions.index(action)
                     regret = node_actions_utilities[action_index] - node_util
-                    node.regret_sum[action_index] += (p1 if player == 0 else p0) * regret
+                    regret_update = (p1 if player == 0 else p0) * regret
+                    node.regret_sum[action_index] += regret_update
+                    total_regret_sum += regret_update
                 node.times_regret_sum_updated += 1
 
             return node_util
@@ -381,9 +388,9 @@ class ModLeducTrainer:
 
 if __name__ == "__main__":
 
-    #random.seed(42)
+    random.seed(42)
 
-    _iterations = 4000000
+    _iterations = 1002
     _algorithm = 'mccfr'
     cards = [Card.Q, Card.Q, Card.K, Card.K, Card.A, Card.A]
     _exploring_phase = 0.0
