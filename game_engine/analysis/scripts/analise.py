@@ -119,12 +119,79 @@ def analyze_log_file(log_file_path):
 
     return tcc_ai_wins, tcc_ai_draws, tcc_ai_losses, rewards, stats
 
+def action_counts(hand_list):
+    fold_count = 0
+    call_or_check_count = 0
+
+    for hand in hand_list:
+        parts = hand.split(':')
+        actions = parts[2]  # Assuming that the action sequence is the third part of the log entry
+
+        if actions.endswith('f'):
+            fold_count += 1
+        elif actions.endswith('c'):
+            call_or_check_count += 1
+
+    return fold_count, call_or_check_count
+
+def autolabel(rects, ax, percentages):
+    """Attach a text label above each bar in rects, displaying its height."""
+    for rect, percentage in zip(rects, percentages):
+        height = rect.get_height()
+        ax.annotate('{:.0f}%'.format(percentage),
+                    xy=(rect.get_x() + rect.get_width() / 2, height),
+                    xytext=(0, 3),  # 3 points vertical offset
+                    textcoords="offset points",
+                    ha='center', va='bottom')
+
+def plot_action_analysis(wins, losses):
+    win_fold_count, win_call_or_check_count = action_counts(wins)
+    loss_fold_count, loss_call_or_check_count = action_counts(losses)
+    
+    total_wins = len(wins)
+    total_losses = len(losses)
+
+    win_fold_percentage = (win_fold_count / total_wins) * 100 if total_wins > 0 else 0
+    win_call_or_check_percentage = (win_call_or_check_count / total_wins) * 100 if total_wins > 0 else 0
+    loss_fold_percentage = (loss_fold_count / total_losses) * 100 if total_losses > 0 else 0
+    loss_call_or_check_percentage = (loss_call_or_check_count / total_losses) * 100 if total_losses > 0 else 0
+
+    categories = ['Wins', 'Losses']
+    folds = [win_fold_percentage, loss_fold_percentage]
+    calls_checks = [win_call_or_check_percentage, loss_call_or_check_percentage]
+
+    x = np.arange(len(categories))  # the label locations
+    width = 0.35  # the width of the bars
+
+    fig, ax = plt.subplots()
+    rects1 = ax.bar(x - width/2, folds, width, label='Folds')
+    rects2 = ax.bar(x + width/2, calls_checks, width, label='Calls/Checks')
+
+    # Set the y-axis to go up to 100
+    ax.set_ylim(0, 100)
+
+    # Add some text for labels, title and custom x-axis tick labels, etc.
+    ax.set_ylabel('Percentage')
+    ax.set_title('Action percentages for Wins and Losses')
+    ax.set_xticks(x)
+    ax.set_xticklabels(categories)
+    ax.legend()
+
+    # Call the autolabel function
+    autolabel(rects1, ax, folds)
+    autolabel(rects2, ax, calls_checks)
+
+    fig.tight_layout()
+
+    plt.show()
+
 def main(log_file_path):
     wins, draws, losses, rewards, stats = analyze_log_file(log_file_path)
     print("\nStatistics:")
     for stat, value in stats.items():
         print(f"{stat.replace('_', ' ').title()}: {value}")
     plot_statistics(rewards, stats)
+    plot_action_analysis(wins, losses)
 
 
 
