@@ -12,7 +12,7 @@ directory_path = os.path.dirname(current_file_path)
 def plot_histogram(rewards):
     plt.figure(figsize=(12, 6))
     # Create histogram with specified bins from -1200 to 1200 with a step of 100
-    bins = range(-1200, 1300, 100)  # Goes to 1300 so that 1200 is included as the right edge for the last bin
+    bins = range(-1250, 1250, 100)  # Goes to 1300 so that 1200 is included as the right edge for the last bin
     plt.hist(rewards, bins=bins, edgecolor='black')
 
     plt.title('Histogram of Game Outcomes')
