@@ -2,6 +2,49 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+import os
+from scipy.stats import norm
+
+# Get the directory path of the current script
+current_file_path = os.path.realpath(__file__)
+directory_path = os.path.dirname(current_file_path)
+
+def plot_histogram(rewards):
+    plt.figure(figsize=(12, 6))
+    # Create histogram with specified bins from -1200 to 1200 with a step of 100
+    bins = range(-1200, 1300, 100)  # Goes to 1300 so that 1200 is included as the right edge for the last bin
+    plt.hist(rewards, bins=bins, edgecolor='black')
+
+    plt.title('Histogram of Game Outcomes')
+    plt.xlabel('Rewards')
+    plt.ylabel('Number of Games')
+    plt.grid(True)
+
+    plt.show()
+
+def plot_gaussian(rewards):
+    # Calculate the mean and standard deviation from the rewards
+    mean = np.mean(rewards)
+    std_dev = np.std(rewards)
+
+    # Generate some data points within the range of rewards for plotting
+    min_reward = min(rewards)
+    max_reward = max(rewards)
+    x = np.linspace(min_reward, max_reward, 1000)
+
+    # Create a normal distribution with the calculated mean and standard deviation
+    y = norm.pdf(x, mean, std_dev)
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(x, y, label='Normal Distribution')
+
+    plt.title('Gaussian Distribution of Rewards')
+    plt.xlabel('Reward')
+    plt.ylabel('Probability Density')
+    plt.grid(True)
+    plt.legend()
+
+    plt.show()
 
 def plot_statistics(rewards, stats):
     # Convert rewards to a pandas Series for cumulative sum
@@ -26,19 +69,6 @@ def plot_statistics(rewards, stats):
             autopct='%1.1f%%', shadow=True, startangle=140)
     plt.axis('equal')
     plt.title('Game Outcome Distribution')
-    plt.show()
-
-    # Plot win/loss streaks
-    labels = ['Longest Win Streak', 'Longest Loss Streak', 'Max Streak']
-    values = [stats['longest_win_streak'], stats['longest_loss_streak'], stats['max_streak']]
-
-    plt.figure(figsize=(8, 5))
-    plt.bar(labels, values, color=['blue', 'red', 'purple'])
-    plt.title('Win and Loss Streaks')
-    plt.ylabel('Number of Games')
-    for i, v in enumerate(values):
-        plt.text(i, v + 0.25, str(v), color='black', ha='center')
-    plt.tight_layout()
     plt.show()
 
 def analyze_log_file(log_file_path):
@@ -152,9 +182,14 @@ def plot_action_analysis(wins, losses):
     total_losses = len(losses)
 
     win_fold_percentage = (win_fold_count / total_wins) * 100 if total_wins > 0 else 0
-    win_call_or_check_percentage = (win_call_or_check_count / total_wins) * 100 if total_wins > 0 else 0
     loss_fold_percentage = (loss_fold_count / total_losses) * 100 if total_losses > 0 else 0
-    loss_call_or_check_percentage = (loss_call_or_check_count / total_losses) * 100 if total_losses > 0 else 0
+
+    # Adjust the percentages to sum up to 100
+    win_fold_percentage = round(win_fold_percentage, 2)
+    loss_fold_percentage = round(loss_fold_percentage, 2)
+
+    win_call_or_check_percentage = round(100 - win_fold_percentage, 2)
+    loss_call_or_check_percentage = round(100 - loss_fold_percentage, 2)
 
     categories = ['Wins', 'Losses']
     folds = [win_fold_percentage, loss_fold_percentage]
@@ -170,19 +205,36 @@ def plot_action_analysis(wins, losses):
     # Set the y-axis to go up to 100
     ax.set_ylim(0, 100)
 
-    # Add some text for labels, title and custom x-axis tick labels, etc.
     ax.set_ylabel('Percentage')
     ax.set_title('Action percentages for Wins and Losses')
     ax.set_xticks(x)
     ax.set_xticklabels(categories)
     ax.legend()
 
-    # Call the autolabel function
     autolabel(rects1, ax, folds)
     autolabel(rects2, ax, calls_checks)
 
     fig.tight_layout()
+    plt.show()
 
+def plot_statistics_overview(stats):
+    # Plotting Total Games, Win Rate, Draw Rate, Loss Rate, Average Win Margin, Average Loss Margin, Std Deviation
+    categories = ['Win Rate', 'Draw Rate', 'Loss Rate', 'Avg Win Margin', 'Avg Loss Margin', 'Std Deviation']
+    values = [stats['win_rate'] * 100, stats['draw_rate'] * 100, stats['loss_rate'] * 100,
+              stats['average_win_margin'], stats['average_loss_margin'], stats['std_deviation']]
+
+    plt.figure(figsize=(10, 5))
+    bars = plt.bar(categories, values, color='skyblue')
+
+    plt.title('AI Performance Statistics')
+    plt.ylabel('Value')
+    plt.xticks(rotation=45, ha="right")
+
+    for bar in bars:
+        yval = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width()/2, yval, round(yval, 2), va='bottom')  # Round to 2 decimals
+
+    plt.tight_layout()
     plt.show()
 
 def main(log_file_path):
@@ -192,9 +244,12 @@ def main(log_file_path):
         print(f"{stat.replace('_', ' ').title()}: {value}")
     plot_statistics(rewards, stats)
     plot_action_analysis(wins, losses)
+    plot_statistics_overview(stats)
+    plot_gaussian(rewards)
+    plot_histogram(rewards)
 
 
 
 if __name__ == "__main__":
-    log_file_name = "important_logs/4kk_noParamenters_10kgames.log"
+    log_file_name = f'{directory_path}/../logs/matches/4kk/4kk_nop_10kgames.log'
     main(log_file_name)
