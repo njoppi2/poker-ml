@@ -102,7 +102,7 @@ class ModLeducTrainer:
     def log(self, log_file):
         create_file(log_file)
         self.log_file = log_file
-        log_format = 'Iteration: %(index)s\nAverage game valueA: %(avg_game_valueA)s\nAverage game valueB: %(avg_game_valueB)s\nAvg regretA: %(avg_regretA)s\nAvg regretB: %(avg_regretB)s\n'
+        log_format = 'Iteration: %(index)s\nAverage game valueA: %(avg_game_valueA)s\nAvg regretA: %(avg_regretA)s\n'
         formatter = logging.Formatter(log_format)
 
         with open(log_file, 'w') as file:
@@ -160,27 +160,36 @@ class ModLeducTrainer:
                 players = (initial_player, initial_player)
                 is_exploring_phase = i < self.exploring_phase * iterations
                 iteration_reward = self.nash_equilibrium_algorithm(self.cards, "", p0, p1, players, 'preflop', is_exploring_phase, model_A_is_p0, None, self.node_history_mapOO, self.node_history_mapOO)
-                sum_of_rewards[0] += model_A_is_p0 * (iteration_reward * (not is_exploring_phase))
+                sum_of_rewards[0] = model_A_is_p0 * (iteration_reward * (not is_exploring_phase))
                 sum_of_rewards[1] += (not model_A_is_p0) * (iteration_reward * (not is_exploring_phase))
                 
-                # avg_regret = 0
-                # for n in self.node_history_mapA.values():
-                #     avg_regret += sum(n.regret_sum)
-                # for n in self.node_history_mapB.values():
-                #     avg_regret += sum(n.regret_sum)
+                if i % 100000 == 0: #quando fazer o log
+                    avg_regret = 0
+                    for n in self.node_history_mapA.values():
+                        avg_regret += sum(n.regret_sum)
+                    for n in self.node_history_mapB.values():
+                        avg_regret += sum(n.regret_sum)
+                    avg_regret /= (len(self.node_history_mapA.values()) + len(self.node_history_mapB.values())) * (i+1)
+                    sample_iteration = {
+                        'index': i,
+                        'avg_game_valueA': final_avg_game_valueA or sum_of_rewards[0], #/ max((i + 1) - self.exploring_phase * iterations, 1),
+                        # 'avg_game_valueB': sum_of_rewards[1] / max((i + 1) - self.exploring_phase * iterations, 1),
+                        'avg_regretA': sum((sum(n.regret_sum) / len(n.regret_sum)) for n in self.node_history_mapA.values()) / (len(self.node_history_mapA.values()) * total_iteration),
+                        # 'avg_regretB': sum((sum(n.regret_sum) / len(n.regret_sum)) for n in self.node_history_mapB.values()) / (len(self.node_history_mapB.values()) * total_iteration),
+                    }
+                    print("iteration: ", i)
+                    self.logger.info('', extra=sample_iteration)
 
-                # avg_regret /= (len(self.node_history_mapA.values()) + len(self.node_history_mapB.values())) * (i+1)
-                # sample_iteration = {
-                #     'index': i,
-                #     'avg_game_valueA': final_avg_game_valueA or sum_of_rewards[0] / max((i + 1) - self.exploring_phase * iterations, 1),
-                #     'avg_game_valueB': sum_of_rewards[1] / max((i + 1) - self.exploring_phase * iterations, 1),
-                #     'avg_regretA': sum((sum(n.regret_sum) / len(n.regret_sum)) for n in self.node_history_mapA.values()) / (len(self.node_history_mapA.values()) * total_iteration),
-                #     'avg_regretB': sum((sum(n.regret_sum) / len(n.regret_sum)) for n in self.node_history_mapB.values()) / (len(self.node_history_mapB.values()) * total_iteration),
-                # }
-
-                # # if i < 10:
-                # #     self.logger.info('', extra=sample_iteration)
-                # self.logger.info('', extra=sample_iteration)
+                if i % 400000 == 0: #quando fazer o pkl
+                    pickle_name = f'{self.model_name}-it{i}.pkl'
+                    iteration_strategy_path = f'../analysis/strategy_snapshots/{pickle_name}'
+                    create_file(iteration_strategy_path)
+                    node_dict = {}
+                    for n in sorted(self.node_history_map.values()):
+                        node_dict[n.info_set] = (list(map(lambda a: a['value'], n.actions)), n.get_average_strategy())
+                    with open(iteration_strategy_path, 'wb') as file:
+                        pickle.dump(node_dict, file)
+                
 
             final_avg_game_valueA = sum_of_rewards[0] / (iterations * (1 - self.exploring_phase))
 
@@ -372,9 +381,9 @@ class ModLeducTrainer:
 
 if __name__ == "__main__":
 
-    random.seed(42)
+    #random.seed(42)
 
-    _iterations = 2000
+    _iterations = 4000000
     _algorithm = 'mccfr'
     cards = [Card.Q, Card.Q, Card.K, Card.K, Card.A, Card.A]
     _exploring_phase = 0.0
@@ -385,7 +394,7 @@ if __name__ == "__main__":
     _fixed_strategyB = None
     # _fixed_strategyA = 'Cyz-cfr-6cards-2maxbet-EPcfr0-mRW0_0001-iter10000'
     # _fixed_strategyB = 'pbD-Cyz-mccfr-6cards-2maxbet-EPcfr0-mRW0_0001-iter100000'
-    total_chips = 3
+    total_chips = 12
     sb, bb = 1, 1
     is_bet_relative = False
 
