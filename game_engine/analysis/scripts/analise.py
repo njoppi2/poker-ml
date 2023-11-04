@@ -114,25 +114,6 @@ def analyze_log_file(log_file_path):
     average_win_margin = np.mean([gain for gain in rewards if gain > 0]) if tcc_ai_wins else 0
     average_loss_margin = np.mean([abs(gain) for gain in rewards if gain < 0]) if tcc_ai_losses else 0
     std_deviation = np.std(rewards)
-    
-    # Calculate win/loss streaks
-    current_streak = max_streak = win_streak = loss_streak = 0
-    for gain in rewards:
-        if gain > 0:
-            if current_streak >= 0:
-                current_streak += 1
-            else:
-                current_streak = 1
-            win_streak = max(win_streak, current_streak)
-        elif gain < 0:
-            if current_streak <= 0:
-                current_streak -= 1
-            else:
-                current_streak = -1
-            loss_streak = max(loss_streak, -current_streak)
-        else:
-            current_streak = 0
-        max_streak = max(max_streak, abs(current_streak))
 
     stats = {
         'total_games': total_games,
@@ -142,12 +123,50 @@ def analyze_log_file(log_file_path):
         'average_win_margin': average_win_margin,
         'average_loss_margin': average_loss_margin,
         'std_deviation': std_deviation,
-        'longest_win_streak': win_streak,
-        'longest_loss_streak': loss_streak,
-        'max_streak': max_streak
+        'expected_value': win_rate * average_win_margin + loss_rate * average_loss_margin
     }
 
     return tcc_ai_wins, tcc_ai_draws, tcc_ai_losses, rewards, stats
+
+def analyze_directory(directory_path):
+    # Lists to store the results from all files
+    all_tcc_ai_wins = []
+    all_tcc_ai_draws = []
+    all_tcc_ai_losses = []
+    all_rewards = []
+
+    # Loop through each file in the directory
+    for filename in os.listdir(directory_path):
+        if filename.endswith('.log'):  # Check if the file is a log file
+            log_file_path = os.path.join(directory_path, filename)
+            # Analyze the log file and accumulate the results
+            tcc_ai_wins, tcc_ai_draws, tcc_ai_losses, rewards, _ = analyze_log_file(log_file_path)
+            all_tcc_ai_wins.extend(tcc_ai_wins)
+            all_tcc_ai_draws.extend(tcc_ai_draws)
+            all_tcc_ai_losses.extend(tcc_ai_losses)
+            all_rewards.extend(rewards)
+
+    # Calculate statistics for all files
+    total_games = len(all_tcc_ai_wins) + len(all_tcc_ai_draws) + len(all_tcc_ai_losses)
+    win_rate = len(all_tcc_ai_wins) / total_games
+    draw_rate = len(all_tcc_ai_draws) / total_games
+    loss_rate = len(all_tcc_ai_losses) / total_games
+    average_win_margin = np.mean([gain for gain in all_rewards if gain > 0]) if all_tcc_ai_wins else 0
+    average_loss_margin = np.mean([abs(gain) for gain in all_rewards if gain < 0]) if all_tcc_ai_losses else 0
+    std_deviation = np.std(all_rewards)
+
+    stats = {
+        'total_games': total_games,
+        'win_rate': win_rate,
+        'draw_rate': draw_rate,
+        'loss_rate': loss_rate,
+        'average_win_margin': average_win_margin,
+        'average_loss_margin': average_loss_margin,
+        'std_deviation': std_deviation,
+        'expected_value': win_rate * average_win_margin - loss_rate * average_loss_margin
+    }
+
+    return all_tcc_ai_wins, all_tcc_ai_draws, all_tcc_ai_losses, all_rewards, stats
 
 def action_counts(hand_list):
     fold_count = 0
@@ -237,8 +256,8 @@ def plot_statistics_overview(stats):
     plt.tight_layout()
     plt.show()
 
-def main(log_file_path):
-    wins, draws, losses, rewards, stats = analyze_log_file(log_file_path)
+def main(directory_path):
+    wins, draws, losses, rewards, stats = analyze_directory(directory_path)
     print("\nStatistics:")
     for stat, value in stats.items():
         print(f"{stat.replace('_', ' ').title()}: {value}")
@@ -251,5 +270,13 @@ def main(log_file_path):
 
 
 if __name__ == "__main__":
-    log_file_name = f'{directory_path}/../logs/matches/4kk/4kk_nop_10kgames.log'
-    main(log_file_name)
+    # Check if the directory path is provided as a command-line argument
+    if len(sys.argv) != 2:
+        print("Usage: python script.py <directory_path>")
+        sys.exit(1)
+
+    log_folder_path = f'{directory_path}/../logs/matches/' + sys.argv[1]  # Get the directory path from the command-line argument
+    if not os.path.isdir(log_folder_path):
+        print(f"The provided directory does not exist: {sys.argv[1]}")
+        sys.exit(1)
+    main(log_folder_path)
