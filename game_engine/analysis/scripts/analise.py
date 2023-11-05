@@ -8,6 +8,7 @@ from scipy.stats import norm
 # Get the directory path of the current script
 current_file_path = os.path.realpath(__file__)
 directory_path = os.path.dirname(current_file_path)
+is_inverted_seat = False
 
 def plot_histogram(rewards):
     plt.figure(figsize=(12, 6))
@@ -96,6 +97,10 @@ def analyze_log_file(log_file_path):
                     tcc_ai_gain = int(parts[4].split('|')[0])
 
                 # Adicionar o ganho do jogador TCC_AI ao vetor de recompensas
+                if is_inverted_seat:
+                    tcc_ai_gain = -int(tcc_ai_gain)
+                else:
+                    tcc_ai_gain = int(tcc_ai_gain)
                 rewards.append(int(tcc_ai_gain))
 
                 # Classificar a partida como ganha, empatada ou perdida
@@ -271,7 +276,7 @@ def main(directory_path):
 
 if __name__ == "__main__":
     # Check if the directory path is provided as a command-line argument
-    if len(sys.argv) != 2:
+    if len(sys.argv) < 2:
         print("Usage: python script.py <directory_path>")
         sys.exit(1)
 
@@ -279,4 +284,7 @@ if __name__ == "__main__":
     if not os.path.isdir(log_folder_path):
         print(f"The provided directory does not exist: {sys.argv[1]}")
         sys.exit(1)
+
+    if len(sys.argv) == 3:
+        is_inverted_seat = sys.argv[2]
     main(log_folder_path)
