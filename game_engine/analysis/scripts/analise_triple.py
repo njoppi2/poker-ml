@@ -63,15 +63,15 @@ def plot_statistics(rewards1, rewards2, rewards3):
     plt.figure(figsize=(12, 6))
 
     # Plot each series on the same figure
-    rewards_series1.plot(label='Rewards 1', color='blue')
-    rewards_series2.plot(label='Rewards 2', color='orange')
-    rewards_series3.plot(label='Rewards 3', color='green')
+    rewards_series1.plot(label='100kk contra DeepStack', color='#097FB4')
+    rewards_series2.plot(label='20kk contra DeepStack', color='#8739BB')
+    rewards_series3.plot(label='4kk contra DeepStack', color='#3E8245')
 
 
     # Title and labels
-    plt.title('Bankroll Over Time')
-    plt.xlabel('Game Number')
-    plt.ylabel('Bankroll')
+    plt.title('Ganho acumulado ao longo de partidas')
+    plt.xlabel('Número de partidas')
+    plt.ylabel('Ganho acumulado')
 
     # Show grid and legend
     plt.grid(True)
@@ -330,45 +330,40 @@ def main(directory_path, directory_path_2, directory_path_3):
     all_matches_log3, wins3, draws3, losses3, rewards3, stats3 = analyze_directory(directory_path_3)
 
 
-    print("\nStatistics for TCC_AI on seat 1 and DeepStack on seat 2:")
+    print("\nStatistics for p1 in log_folder_1:")
     for stat, value in stats.items():
         print(f"{stat.replace('_', ' ').title()}: {value}")
 
-    print("\nStatistics for DeepStack on seat 1 and TCC_AI on seat 2:")
+    print("\nStatistics for p1 in log_folder_2:")
     for stat, value in stats2.items():
         print(f"{stat.replace('_', ' ').title()}: {value}")
 
+    print("\nStatistics for p1 in log_folder_3:")
+    for stat, value in stats3.items():
+        print(f"{stat.replace('_', ' ').title()}: {value}")    
+
     plot_statistics(rewards, rewards2, rewards3)
 
-    all_matches = wins + draws + losses
-    p1_should_win, p1_should_draw, p1_should_lose = get_hand_quality_proportion(all_matches)
+    p1_should_win3, p1_should_draw3, p1_should_lose3 = get_hand_quality_proportion(all_matches_log1)
 
-    print("\nlen(all_matches) old: ", len(all_matches))
-    print("p1_should_win: ", len(p1_should_win)/len(all_matches))
-    print("p1_should_draw: ", len(p1_should_draw)/len(all_matches))
-    print("p1_should_lose: ", len(p1_should_lose)/len(all_matches))
+    print("\nlen(all_matches) log1: ", len(all_matches_log1))
+    print("p1_should_win: ", len(p1_should_win3)/len(all_matches_log1))
+    print("p1_should_draw: ", len(p1_should_draw3)/len(all_matches_log1))
+    print("p1_should_lose: ", len(p1_should_lose3)/len(all_matches_log1))
 
-    # p1_should_win3, p1_should_draw3, p1_should_lose3 = get_hand_quality_proportion(all_matches_log1)
+    p1_should_win4, p1_should_draw4, p1_should_lose4 = get_hand_quality_proportion(all_matches_log2)
 
-    # print("\nlen(all_matches) log1: ", len(all_matches_log1))
-    # print("p1_should_win: ", len(p1_should_win3)/len(all_matches_log1))
-    # print("p1_should_draw: ", len(p1_should_draw3)/len(all_matches_log1))
-    # print("p1_should_lose: ", len(p1_should_lose3)/len(all_matches_log1))
+    print("\nlen(all_matches) log2: ", len(all_matches_log2))
+    print("p1_should_win: ", len(p1_should_win4)/len(all_matches_log2))
+    print("p1_should_draw: ", len(p1_should_draw4)/len(all_matches_log2))
+    print("p1_should_lose: ", len(p1_should_lose4)/len(all_matches_log2))
+    
+    p1_should_win5, p1_should_draw5, p1_should_lose5 = get_hand_quality_proportion(all_matches_log3)
 
-    all_matches2 = wins2 + draws2 + losses2
-    p1_should_win2, p1_should_draw2, p1_should_lose2 = get_hand_quality_proportion(all_matches2)
-
-    print("\nlen(all_matches) old: ", len(all_matches2))
-    print("p1_should_win: ", len(p1_should_win2)/len(all_matches2))
-    print("p1_should_draw: ", len(p1_should_draw2)/len(all_matches2))
-    print("p1_should_lose: ", len(p1_should_lose2)/len(all_matches2))
-
-    # p1_should_win4, p1_should_draw4, p1_should_lose4 = get_hand_quality_proportion(all_matches_log2)
-
-    # print("\nlen(all_matches) log2: ", len(all_matches_log2))
-    # print("p1_should_win: ", len(p1_should_win4)/len(all_matches_log2))
-    # print("p1_should_draw: ", len(p1_should_draw4)/len(all_matches_log2))
-    # print("p1_should_lose: ", len(p1_should_lose4)/len(all_matches_log2))
+    print("\nlen(all_matches) log3: ", len(all_matches_log3))
+    print("p1_should_win: ", len(p1_should_win5)/len(all_matches_log3))
+    print("p1_should_draw: ", len(p1_should_draw5)/len(all_matches_log3))
+    print("p1_should_lose: ", len(p1_should_lose5)/len(all_matches_log3))
 
     #plot_statistics(rewards, stats)
     #plot_action_analysis(wins, losses)

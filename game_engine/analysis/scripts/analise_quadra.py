@@ -53,17 +53,28 @@ def plot_gaussian(rewards):
 
     plt.show()
 
-def plot_statistics(rewards1, rewards2):
+def plot_statistics(rewards1, rewards2, rewards3, rewards4):
     # Convert rewards to pandas Series for cumulative sum
     rewards_series1 = pd.Series(rewards1).cumsum()
     rewards_series2 = pd.Series(rewards2).cumsum()
+    rewards_series3 = pd.Series(rewards3).cumsum()
+    rewards_series4 = pd.Series(rewards4).cumsum()
 
     # Plot the bankroll over time for both series
     plt.figure(figsize=(12, 6))
 
-    # Plot each series on the same figure
-    rewards_series1.plot(label='4kk contra DeepStack', color='#f3474a')
-    rewards_series2.plot(label='DeepStack contra 4kk', color='#ffa600')
+    # Draw baseline strat
+    rewards_series4.plot(label='DeepStack contra DeepStack', color='#ffa600')
+    
+    # Plot each series on the same figure 
+    rewards_series3.plot(label='4kk contra DeepStack', color='#f3474a')
+    rewards_series2.plot(label='20kk contra DeepStack', color='#aa0073')
+    rewards_series1.plot(label='100kk contra DeepStack', color='#211d78')
+
+    # Get the current limits of the y-axis
+    ylim = plt.ylim()
+    # Pinta a área abaixo da linha do rewards_series4 até o limite inferior do eixo y
+    plt.fill_between(rewards_series4.index, rewards_series4, ylim[0], alpha=0.3, color='#ffa600')
 
     # Title and labels
     plt.title('Ganho acumulado ao longo de partidas')
@@ -76,27 +87,6 @@ def plot_statistics(rewards1, rewards2):
 
     # Display the plot
     plt.show()
-
-def get_avg_gain(matchlist):
-    cum_gain = 0
-    for line in matchlist:
-        # Separar os componentes da linha
-        parts = line.split(':')
-
-        # Extrair o ganho do jogador TCC_AI, que pode estar na quinta ou sexta posição da linha,
-        # dependendo de quem começou jogando a partida
-        if int(parts[1]) % 2 == 0:
-            p1_gain = int(parts[4].split('|')[1])
-
-        else:
-            p1_gain = int(parts[4].split('|')[0])
-
-        # Adicionar o ganho do jogador TCC_AI ao vetor de recompensas
-        if is_inverted_seat:
-            cum_gain += -int(p1_gain)
-        else:
-            cum_gain += int(p1_gain)
-    return (int(cum_gain)/len(matchlist))
 
 def get_hand_quality_proportion(matchlist):
     CARDS_RANK = {'Q': 0, 'K': 1, 'A': 2, 'Pair': 3}
@@ -150,11 +140,15 @@ def analyze_log_file(log_file_path):
     p1_losses = []
     p1_rewards = []
 
+    #count_games = 0
     # Abrir o arquivo e ler linha por linha
     with open(log_file_path, 'r') as file:
         for line in file:
+            # if count_games == 1000:
+            #     break
             # Verificar se a linha começa com "STATE:"
             if line.startswith("STATE:"):
+                #count_games += 1
                 # Separar os componentes da linha
                 parts = line.split(':')
 
@@ -285,12 +279,12 @@ def action_lists(hand_list):
 
         # Extrair o ganho do jogador TCC_AI, que pode estar na quinta ou sexta posição da linha,
         # dependendo de quem começou jogando a partida
-        # if int(parts[1]) % 2 == 0:
-        #     if int(parts[4].split('|')[1]) != -100:
-        #         continue
-        # else:
-        #     if int(parts[4].split('|')[0]) != -100:
-        #         continue
+        if int(parts[1]) % 2 == 0:
+            if int(parts[4].split('|')[1]) != -100:
+                continue
+        else:
+            if int(parts[4].split('|')[0]) != -100:
+                continue
 
         if actions.endswith('f'):
             fold_hands.append(hand)
@@ -352,70 +346,61 @@ def plot_action_analysis(wins, losses):
     fig.tight_layout()
     plt.show()
 
-def main(directory_path, directory_path_2):
+def main(directory_path, directory_path_2, directory_path_3, directory_path_4):
     all_matches_log1, wins, draws, losses, rewards, stats = analyze_directory(directory_path)
     all_matches_log2, wins2, draws2, losses2, rewards2, stats2 = analyze_directory(directory_path_2)
+    all_matches_log3, wins3, draws3, losses3, rewards3, stats3 = analyze_directory(directory_path_3)
+    all_matches_log4, wins4, draws4, losses4, rewards4, stats4 = analyze_directory(directory_path_4)
 
-    print("\nStatistics for 100kk vs DeepStack:")
+
+    print("\nStatistics for p1 in log_folder_1:")
     for stat, value in stats.items():
         print(f"{stat.replace('_', ' ').title()}: {value}")
 
-    print("\nNow for the inverted seats, statistics for DeepStack vs 20kk:")
+    print("\nStatistics for p1 in log_folder_2:")
     for stat, value in stats2.items():
         print(f"{stat.replace('_', ' ').title()}: {value}")
 
-    plot_statistics(rewards, rewards2)
+    print("\nStatistics for p1 in log_folder_3:")
+    for stat, value in stats3.items():
+        print(f"{stat.replace('_', ' ').title()}: {value}")
+            
+    print("\nStatistics for p1 in log_folder_4:")
+    for stat, value in stats4.items():
+        print(f"{stat.replace('_', ' ').title()}: {value}") 
 
-    all_matches = wins + draws + losses
-    p1_should_win, p1_should_draw, p1_should_lose = get_hand_quality_proportion(all_matches)
+    plot_statistics(rewards, rewards2, rewards3, rewards4)
 
-    print("\nlen(all_matches) old: ", len(all_matches))
-    print("p1_should_win: ", len(p1_should_win)/len(all_matches))
-    print("p1_should_draw: ", len(p1_should_draw)/len(all_matches))
-    print("p1_should_lose: ", len(p1_should_lose)/len(all_matches))
+    p1_should_win3, p1_should_draw3, p1_should_lose3 = get_hand_quality_proportion(all_matches_log1)
 
-    # p1_should_win3, p1_should_draw3, p1_should_lose3 = get_hand_quality_proportion(all_matches_log1)
+    print("\nlen(all_matches) log1: ", len(all_matches_log1))
+    print("p1_should_win: ", len(p1_should_win3)/len(all_matches_log1))
+    print("p1_should_draw: ", len(p1_should_draw3)/len(all_matches_log1))
+    print("p1_should_lose: ", len(p1_should_lose3)/len(all_matches_log1))
 
-    # print("\nlen(all_matches) log1: ", len(all_matches_log1))
-    # print("p1_should_win: ", len(p1_should_win3)/len(all_matches_log1))
-    # print("p1_should_draw: ", len(p1_should_draw3)/len(all_matches_log1))
-    # print("p1_should_lose: ", len(p1_should_lose3)/len(all_matches_log1))
+    p1_should_win4, p1_should_draw4, p1_should_lose4 = get_hand_quality_proportion(all_matches_log2)
 
-    all_matches2 = wins2 + draws2 + losses2
-    p1_should_win2, p1_should_draw2, p1_should_lose2 = get_hand_quality_proportion(all_matches2)
+    print("\nlen(all_matches) log2: ", len(all_matches_log2))
+    print("p1_should_win: ", len(p1_should_win4)/len(all_matches_log2))
+    print("p1_should_draw: ", len(p1_should_draw4)/len(all_matches_log2))
+    print("p1_should_lose: ", len(p1_should_lose4)/len(all_matches_log2))
+    
+    p1_should_win5, p1_should_draw5, p1_should_lose5 = get_hand_quality_proportion(all_matches_log3)
 
-    print("\nlen(all_matches) old: ", len(all_matches2))
-    print("p1_should_win: ", len(p1_should_win2)/len(all_matches2))
-    print("p1_should_draw: ", len(p1_should_draw2)/len(all_matches2))
-    print("p1_should_lose: ", len(p1_should_lose2)/len(all_matches2))
-
-    # p1_should_win4, p1_should_draw4, p1_should_lose4 = get_hand_quality_proportion(all_matches_log2)
-
-    # print("\nlen(all_matches) log2: ", len(all_matches_log2))
-    # print("p1_should_win: ", len(p1_should_win4)/len(all_matches_log2))
-    # print("p1_should_draw: ", len(p1_should_draw4)/len(all_matches_log2))
-    # print("p1_should_lose: ", len(p1_should_lose4)/len(all_matches_log2))
+    print("\nlen(all_matches) log3: ", len(all_matches_log3))
+    print("p1_should_win: ", len(p1_should_win5)/len(all_matches_log3))
+    print("p1_should_draw: ", len(p1_should_draw5)/len(all_matches_log3))
+    print("p1_should_lose: ", len(p1_should_lose5)/len(all_matches_log3))
 
     #plot_statistics(rewards, stats)
     #plot_action_analysis(wins, losses)
     #plot_gaussian(rewards)
-    #plot_histogram(rewards)
-    wins_folds_list, wins_checkcall_lists = action_lists(wins)
-    losses_folds_list, losses_checkcall_lists = action_lists(losses)
-    print("Porcentagem de folds em derrotas ", len(losses_folds_list)/len(losses))
-    print("Porcentagem de check/call em derrotas ", len(losses_checkcall_lists)/len(losses))
-    
-    print("Perda media em folds", get_avg_gain(losses_folds_list))
-    print("Perda media em check/call", get_avg_gain(losses_checkcall_lists))
-
-
-    print("\n Agora para o lado do deepstack:")
-    losses_folds_list, losses_checkcall_lists = action_lists(losses2)
-    print("Porcentagem de folds em derrotas ", len(losses_folds_list)/len(losses2))
-    print("Porcentagem de check/call em derrotas ", len(losses_checkcall_lists)/len(losses2))
-
-    print("Perda media em folds", get_avg_gain(losses_folds_list))
-    print("Perda media em check/call", get_avg_gain(losses_checkcall_lists))
+    plot_histogram(rewards)
+    # wins_folds_list, wins_checkcall_lists = action_lists(wins)
+    # losses_folds_list, losses_checkcall_lists = action_lists(losses)
+    # print("losses_folds_list:")
+    # for hand in losses_folds_list:
+    #     print(hand, end=' ')
 
 
 if __name__ == "__main__":
@@ -426,6 +411,8 @@ if __name__ == "__main__":
 
     log_folder_path = f'{directory_path}/../logs/matches/' + sys.argv[1]  # Get the directory path from the command-line argument
     log_folder_path2 = f'{directory_path}/../logs/matches/' + sys.argv[2]  # Get the directory path from the command-line argument
+    log_folder_path3 = f'{directory_path}/../logs/matches/' + sys.argv[3]  # Get the directory path from the command-line argument
+    log_folder_path4 = f'{directory_path}/../logs/matches/' + sys.argv[4]  # Get the directory path from the command-line argument
 
     if not os.path.isdir(log_folder_path):
         print(f"The provided directory does not exist: {sys.argv[1]}")
@@ -434,8 +421,9 @@ if __name__ == "__main__":
     if not os.path.isdir(log_folder_path2):
         print(f"The provided directory does not exist: {sys.argv[2]}")
         sys.exit(1)
+    
 
-    if len(sys.argv) == 4:
-        is_inverted_seat = sys.argv[3]
+    # if len(sys.argv) == 6:
+    #     is_inverted_seat = sys.argv[5]
 
-    main(log_folder_path, log_folder_path2)
+    main(log_folder_path, log_folder_path2, log_folder_path3, log_folder_path4)

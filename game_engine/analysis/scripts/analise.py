@@ -56,12 +56,28 @@ def plot_statistics(rewards, stats):
     # Convert rewards to a pandas Series for cumulative sum
     rewards_series = pd.Series(rewards).cumsum()
 
-    # Plot the bankroll over time
+    # Calcular a média acumulada
+    media_acumulada = rewards_series / np.arange(1, len(rewards) + 1)
+
+    # Calcular o desvio padrão acumulado
+    desvios = [rewards_series.iloc[:i+1].std(ddof=1) if i > 0 else 0 for i in range(len(rewards))]
+
+    # Plot the rewards over time
     plt.figure(figsize=(12, 6))
-    rewards_series.plot(title='Bankroll Over Time')
-    plt.xlabel('Game Number')
-    plt.ylabel('Bankroll')
-    plt.grid(True)
+
+    plt.plot(rewards, label='Ganhos', alpha=0.5)
+    plt.plot(media_acumulada, label='Média Acumulada', color='red')
+
+    # Plotar o desvio padrão acumulado
+    plt.fill_between(range(len(rewards)), media_acumulada - desvios, media_acumulada + desvios, color='gray', alpha=0.2, label='Desvio Padrão Acumulado')
+
+    # Adicionar título e legenda
+    plt.title('Ganhos com Média e Desvio Padrão Acumulados')
+    plt.xlabel('Número de Amostras')
+    plt.ylabel('Valor')
+    plt.legend()
+
+    # Mostrar o plot
     plt.show()
 
     # Plot the win/draw/loss distribution
@@ -403,11 +419,11 @@ def main(directory_path):
     print("\nStatistics:")
     for stat, value in stats.items():
         print(f"{stat.replace('_', ' ').title()}: {value}")
-    #plot_statistics(rewards, stats)
-    #plot_action_analysis(wins, losses)
-    #plot_statistics_overview(stats)
-    #plot_gaussian(rewards)
-    #plot_histogram(rewards)
+    plot_statistics(rewards, stats)
+    plot_action_analysis(wins, losses)
+    plot_statistics_overview(stats)
+    plot_gaussian(rewards)
+    plot_histogram(rewards)
     
     all_matches = wins + draws + losses
     p1_should_win, p1_should_draw, p1_should_lose = get_hand_quality_proportion(all_matches)

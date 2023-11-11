@@ -178,4 +178,4 @@ def create_json_from_pickle(pickle_file_path):
 
 
 if __name__ == "__main__":
-    create_json_from_pickle('../analysis/blueprints/OMC-mccfr-6cards-12maxbet-EPcfr0_0-mRW0_0-iter500.pkl')
+    create_json_from_pickle('../analysis/blueprints/important_blueprints/IOu-mccfr-6cards-11maxbet-EPcfr0_0-mRW0_0-iter100000000.pkl')
