@@ -60,7 +60,7 @@
 .choice {
     width: 100px;
     height: 10vh;
-    background-color: rgb(252, 252, 45);
+    background-color: #F2AE2E;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -135,4 +135,23 @@
 .action-wrapper * {
     font-weight: bold !important;
     color: #1d1a1a !important;
+}
+
+.statistics-button {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background-image: url('../../../public/assets/statistics.svg');
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    height: 40px;
+    width: 40px;
+    z-index: 0;
+    border-radius: 10%;
+
+    &:hover {
+        cursor: pointer;
+        opacity: 0.5;
+    }
 }

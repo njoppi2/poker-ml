@@ -1,0 +1,122 @@
+.statistics-panel-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: row;
+    position: absolute;
+    top: 0px;
+    bottom: 0px;
+    left: 0px;
+    right: 0px;
+    background-color: rgba(255, 255, 255, 0.2);
+    padding: 20px;
+    /* border-radius: 10px; */
+    z-index: 2;
+}
+
+.close-button {
+    position: absolute;
+    top: 30px;
+    right: 30px;
+    background-image: url('../../../public/assets/close.svg');
+    background-size: contain;
+    height: 30px;
+    width: 30px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    &:hover {
+        cursor: pointer;
+        opacity: 0.5;
+    }
+
+    z-index: 3;
+}
+
+.statistics-numbers-wrapper {
+    display: flex;
+    justify-content: flex-start;
+    align-items: flex-start;
+    flex-direction: column;
+    margin-right: 20px;
+    height: 100%;
+    width: 30.00%;
+    background-color: #fff;
+    border-radius: 10px;
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+.statistics-graphs-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    flex-direction: column;
+    /* margin: 10px; */
+    height: 100%;
+    width: 70.00%;
+    background-color: #fff;
+    border-radius: 10px;
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+.statistics-numbers {
+    margin-bottom: 10px;
+}
+
+.number-row {
+    display: flex;
+    flex-direction: row;
+}
+
+.number-column {
+    min-width: 60px;
+}
+
+.statistics-graphs-header {
+    width: calc(100% - 40px);
+    height: 10vh;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+}
+
+.graph_wrapper {
+    width: 100%;
+    height: calc(100% - 10vh);
+}
+
+.graph-option {
+    width: 100px;
+    height: 9vh;
+    background-color: #FFD078;
+    display: flex;
+    color: #1d1a1a;
+    justify-content: center;
+    align-items: center;
+    margin-right: 10px;
+    border-radius: 10px;
+    font-size: 15px;
+    text-align: center;
+    opacity: 0.7;
+
+    &:hover {
+        cursor: pointer;
+        opacity: 0.4;
+    }
+
+    &:last-child {
+        margin: 0px;
+    }
+}
+
+.graphs-header-text {
+    margin-right: 10px;
+    font-weight: bold;
+}
+
+.bold {
+    font-weight: bold;
+}

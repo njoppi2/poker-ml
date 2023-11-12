@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './styles.css';
 import Players from '../Players';
+import Statistics from '../Statistics';
 import Cards from '../Cards';
 import Slider from '../Slider';
 
@@ -8,6 +9,7 @@ import Slider from '../Slider';
 const Game = ({ gameData, sendMessage }) => {
     const [min, setMin] = useState(gameData.min_turn_bet_to_continue);
     const [sliderValue, setSliderValue] = useState(min);
+    const [isStatisticsPanelOpen, setStatisticsPanelOpen] = useState(false);
     const humanPlayer = gameData.players.initial_players.find(p => p.is_robot === false);
     console.log('gameData: ', gameData);
 
@@ -18,6 +20,8 @@ const Game = ({ gameData, sendMessage }) => {
 
     return (
         <div className='main'>
+            <div className='statistics-button' onClick={() => setStatisticsPanelOpen(prev => !prev)} />
+            {isStatisticsPanelOpen && <Statistics gameData={gameData} closePanel={() => setStatisticsPanelOpen()} />}
             <div className="table-outer-wrapper">
                 <div className="table-wrapper">
                     <div className="table">

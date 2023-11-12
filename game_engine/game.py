@@ -37,7 +37,9 @@ class GameEncoder(json.JSONEncoder):
 class Game:
     def __init__(self, websocket, num_ai_players: int, num_human_players: int, initial_chips: int, increase_blind_every: int):
         self.is_leduc = True
+        self.reset_chips_every_round = True
         self.websocket = websocket
+        self.initial_chips = initial_chips
         self.players = Players(self, num_ai_players, num_human_players, initial_chips)
         self._blind_structure = BlindStructure(self.is_leduc)
         self._increase_blind_every = increase_blind_every
@@ -229,7 +231,12 @@ class Round:
                 for group_player in remaining_players_to_receive:
                     group_player.add_chips(chips_per_player)
 
-
+        if self.game.reset_chips_every_round:
+            for player in self.players.get_players("all"):
+                current_chips = player.chips
+                round_chip_balance = current_chips - self.game.initial_chips
+                player.add_chip_balance(round_chip_balance)
+                player.set_chips(self.game.initial_chips)
         assert self.game.total_pot == 0
     
 

@@ -53,7 +53,9 @@ class PlayerEncoder(json.JSONEncoder):
                 "round_bet_value": obj.round_bet_value,
                 "is_robot": obj.is_robot,
                 "turn_state": turn_state_data,
-                "played_current_phase": obj.played_current_phase
+                "played_current_phase": obj.played_current_phase,
+                "chip_balance": obj.chip_balance,
+                "chip_balance_history": obj.chip_balance_history
             }
         return super().default(obj)
 
@@ -77,6 +79,8 @@ class Player:
         self.is_robot = not is_human
         self.turn_state: PlayerTurnState = PlayerTurnState.NOT_PLAYING
         self.played_current_phase = False
+        self.chip_balance = 0
+        self.chip_balance_history = []
         self.game = game
 
     def reset_round_player(self):
@@ -255,6 +259,13 @@ class Player:
     
     def add_chips(self, amount: int):
         self.chips += amount
+
+    def set_chips(self, amount: int):
+        self.chips = amount
+
+    def add_chip_balance(self, amount: int):
+        self.chip_balance += amount
+        self.chip_balance_history.append(amount)
 
     def __str__(self):
         return f"{self.name} has {self.chips} chips, and has the hand: {', '.join(map(str, self.cards))}"
