@@ -55,7 +55,7 @@ const Statistics = ({ gameData, closePanel }) => {
                     <OptionButton currentOption={graphOption} setCurrentOption={(type) => setGraphOption(type)} myOption={"Total chip balance"} />
                 </div>
                 <div className='graph_wrapper'>
-                    <Graph data={getData(humanPlayer.chip_balance_history, graphOption)} />
+                    <Graph data={getData(humanPlayer.chips_won_history, graphOption)} />
                 </div>
             </div>
         </div >
