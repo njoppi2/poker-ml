@@ -55,7 +55,7 @@ class PlayerEncoder(json.JSONEncoder):
                 "turn_state": turn_state_data,
                 "played_current_phase": obj.played_current_phase,
                 "chip_balance": obj.chip_balance,
-                "chip_balance_history": obj.chip_balance_history
+                "chips_won_history": obj.chips_won_history
             }
         return super().default(obj)
 
@@ -80,7 +80,7 @@ class Player:
         self.turn_state: PlayerTurnState = PlayerTurnState.NOT_PLAYING
         self.played_current_phase = False
         self.chip_balance = 0
-        self.chip_balance_history = []
+        self.chips_won_history = []
         self.game = game
 
     def reset_round_player(self):
@@ -139,50 +139,59 @@ class Player:
             except ValueError:
                 print("Invalid input. Please enter a valid integer.")
 
-    async def ai_play(self, min_turn_value_to_continue: int):
-        time.sleep(1)  # Pause execution for 2 seconds
+    async def ai_play(self, min_turn_value_to_continue: int, min_bet: int):
+        time.sleep(0.3)
         print("min_turn_value_to_continue: ", min_turn_value_to_continue)
         if self.chips < 100:
             await self.make_bet_up_to(100)
         else:
-            if min_turn_value_to_continue == 50:
-                await self.make_bet_up_to(77)
+            if min_turn_value_to_continue == min_bet:
+                random_number = random.random()
+                if random_number < 0.7:
+                    await self.make_bet_up_to(min_bet) # call
+                else:
+                    await self.make_bet_up_to(2 * min_bet) # min re-raise
             elif min_turn_value_to_continue == 200:
                 state = PlayerTurnState.FOLDED
                 self.set_turn_state(state)
             else:
-                # random number from 0 to 1
                 random_number = random.random()
-                if random_number < 0.8:
+                if random_number < 0.6:
                     await self.make_bet_up_to(min_turn_value_to_continue)
                 else:
-                    await self.make_bet_up_to(min_turn_value_to_continue + 40)
+                    aditional_bet = int(random.random() * (self.chips - min_turn_value_to_continue))
+                    await self.make_bet_up_to(max(2*min_turn_value_to_continue, min_bet) + aditional_bet)
             if self.get_turn_state() == PlayerTurnState.PLAYING_TURN:
                 self.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
         self.set_played_current_phase(True)
 
-    async def play(self, min_turn_value_to_continue: int):
+    async def play(self, min_turn_value_to_continue: int, min_bet: int):
         if self.is_robot:
-            await self.ai_play(min_turn_value_to_continue)
+            await self.ai_play(min_turn_value_to_continue, min_bet)
         else:
             while self.get_turn_state() == PlayerTurnState.PLAYING_TURN:
                 try:
                     action = await self.game.websocket.recv()
-
+                    is_action_legal = False
                     # action = input(f"{self.name}, it's your turn. Enter your action (check, bet, fold, etc.): ").strip().lower()
 
-                    if action == "Check" or self.is_valid_bet_format(action):
+                    if action == "Check" or action == "Call" or self.is_valid_bet_format(action):
                         if action == "Check":
                             turn_bet = 0
+                            is_action_legal = min_turn_value_to_continue == 0
+                        elif action == "Call":
+                            turn_bet = min_turn_value_to_continue
+                            is_action_legal = turn_bet <= self.chips and turn_bet == min_turn_value_to_continue
                         else:
                             turn_bet = self.is_valid_bet_format(action)[1]
-                        if turn_bet >= min_turn_value_to_continue:
+                            is_action_legal = turn_bet >= (min(2 * min_turn_value_to_continue, self.chips)) and turn_bet <= self.chips and turn_bet >= min(min_bet, self.chips)
+                        if is_action_legal:
                             if await self.make_bet(turn_bet):
                                 if self.get_turn_state() == PlayerTurnState.PLAYING_TURN:
                                     self.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
                                     break
-                        else:
-                            print(f"You must bet at least the minimum bet to continue, which is {min_turn_value_to_continue}.")
+                            else:
+                                print(f"You must bet at least the minimum bet to continue, which is {min_turn_value_to_continue}.")
                     elif action == "Fold":
                         self.set_turn_state(PlayerTurnState.FOLDED)
                         break
@@ -265,7 +274,7 @@ class Player:
 
     def add_chip_balance(self, amount: int):
         self.chip_balance += amount
-        self.chip_balance_history.append(amount)
+        self.chips_won_history.append(amount)
 
     def __str__(self):
         return f"{self.name} has {self.chips} chips, and has the hand: {', '.join(map(str, self.cards))}"

@@ -4,6 +4,7 @@ import Box from '@mui/material/Box';
 import Grid from '@mui/material/Grid';
 import Slider from '@mui/material/Slider';
 import MuiInput from '@mui/material/Input';
+import './styles.css';
 
 const Input = styled(MuiInput)`
   width: 42px;
@@ -44,6 +45,7 @@ export default function InputSlider({ min, max, value, onValueChange }) {
                         size="small"
                         onChange={handleInputChange}
                         onBlur={handleBlur}
+                        className="slider-input"
                         inputProps={{
                             step: 1,
                             min,

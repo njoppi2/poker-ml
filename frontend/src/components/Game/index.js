@@ -7,16 +7,19 @@ import Slider from '../Slider';
 
 
 const Game = ({ gameData, sendMessage }) => {
-    const [min, setMin] = useState(gameData.min_turn_bet_to_continue);
-    const [sliderValue, setSliderValue] = useState(min);
-    const [isStatisticsPanelOpen, setStatisticsPanelOpen] = useState(false);
     const humanPlayer = gameData.players.initial_players.find(p => p.is_robot === false);
+    const minBetOrRaise = Math.min(2 * gameData.min_turn_value_to_continue || gameData.min_bet, humanPlayer.chips);
+    const [min, setMin] = useState(gameData.min_turn_value_to_continue);
+    const [minBet, setMinBet] = useState(minBetOrRaise);
+    const [sliderValue, setSliderValue] = useState(minBetOrRaise);
+    const [isStatisticsPanelOpen, setStatisticsPanelOpen] = useState(false);
     console.log('gameData: ', gameData);
 
     useEffect(() => {
-        setMin(gameData.min_turn_bet_to_continue);
-        setSliderValue(gameData.min_turn_bet_to_continue);
-    }, [gameData.min_turn_bet_to_continue]);
+        setMin(gameData.min_turn_value_to_continue);
+        setMinBet(minBetOrRaise);
+        setSliderValue(minBetOrRaise);
+    }, [gameData.min_turn_value_to_continue, gameData.min_bet, humanPlayer.chips]);
 
     return (
         <div className='main'>
@@ -41,9 +44,10 @@ const Game = ({ gameData, sendMessage }) => {
                     < div className="choices-wrapper">
                         <div className="choice" onClick={() => sendMessage("Fold")}>Fold</div>
                         {min === 0 && <div className="choice" onClick={() => sendMessage("Check")}>Check</div>}
-                        <div className="choice" onClick={() => sendMessage("Bet " + sliderValue)}>Bet</div>
+                        {min !== 0 && <div className="choice" onClick={() => sendMessage("Call")}>Call</div>}
+                        {min < humanPlayer.chips && <div className="choice" onClick={() => sendMessage("Bet " + sliderValue)}>Bet</div>}
                     </div>
-                    <Slider min={min} max={humanPlayer.chips} value={sliderValue} onValueChange={setSliderValue} />
+                    <Slider min={minBetOrRaise} max={humanPlayer.chips} value={sliderValue} onValueChange={setSliderValue} />
                 </div>}
             </div>
         </div >
