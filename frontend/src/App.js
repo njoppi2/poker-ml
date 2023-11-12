@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import Game from './components/Game';
+import './App.css';
+import OptionButton from './components/OptionButton';
 
 function App() {
     const [gameData, setGameData] = useState({});
     const [socket, setSocket] = useState(null); // WebSocket connection state
-    const [initialPage, setInitialPage] = useState(true); // WebSocket connection state
+    const [initialPage, setInitialPage] = useState(true);
+    const [gameType, setGameType] = useState("Leduc");
+    const [isChipSpinning, setIsChipSpinning] = useState(false);
 
     const sendMessage = (message) => {
         if (socket && socket.readyState === WebSocket.OPEN) {
@@ -13,7 +17,10 @@ function App() {
     };
 
     const handleInitialPageClick = () => {
-        setInitialPage(false);
+        setIsChipSpinning(true);
+        setTimeout(() => {
+            setInitialPage(false);
+        }, 1500);
     }
 
     useEffect(() => {
@@ -23,7 +30,7 @@ function App() {
         newSocket.onopen = () => {
             console.log('WebSocket connected');
             // Send a message to start the game on the server
-            newSocket.send('start-game');
+            newSocket.send(`start-game-${gameType}`);
         };
 
         newSocket.onmessage = (event) => {
@@ -50,16 +57,20 @@ function App() {
 
     return (
         <div className="App">
-            {initialPage ? (
-                <div className="initial-page" onClick={handleInitialPageClick}>
-                    Start the game!
+            {initialPage || (!gameData || Object.keys(gameData).length === 0) ? (<>
+                <div className="initial-page">
+                    <div className='options-wrapper'>
+                        <OptionButton currentOption={gameType} setCurrentOption={(type) => setGameType(type)} myOption={"Texas Hold'em"} />
+                        <OptionButton currentOption={gameType} setCurrentOption={(type) => setGameType(type)} myOption={"Leduc"} />
+                    </div>
+                    <div className='start-button' onClick={handleInitialPageClick}>
+                        Start Game
+                    </div>
                 </div>
+                <div className='App-logo' style={!isChipSpinning ? { animation: 'none' } : {}} />
+            </>
             ) : (
-                (!gameData || Object.keys(gameData).length === 0) ? (
-                    <p>Loading</p>
-                ) : (
-                    <Game gameData={gameData} sendMessage={sendMessage} />
-                )
+                <Game gameData={gameData} sendMessage={sendMessage} />
             )
             }
         </div>

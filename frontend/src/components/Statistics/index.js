@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import './styles.css';
 import Cards from '../Cards';
 import Graph from '../Graph';
+import OptionButton from '../OptionButton';
 
 function cumulativeSum(numbers) {
     if (!Array.isArray(numbers)) {
@@ -12,7 +13,7 @@ function cumulativeSum(numbers) {
 }
 
 function getData(data, graphOption) {
-    if (graphOption === 0) {
+    if (graphOption === "Chips won per game") {
         return data
     } else {
         return cumulativeSum(data)
@@ -21,7 +22,7 @@ function getData(data, graphOption) {
 
 const Statistics = ({ gameData, closePanel }) => {
     const initial_players = gameData.players?.initial_players || [];
-    const [graphOption, setGraphOpition] = useState(0);
+    const [graphOption, setGraphOption] = useState("Chips won per game");
 
     const humanPlayer = initial_players.find(p => p.is_robot === false);
     return (
@@ -50,8 +51,8 @@ const Statistics = ({ gameData, closePanel }) => {
             <div className='statistics-graphs-wrapper'>
                 <div className='statistics-graphs-header'>
                     <div className='graphs-header-text'>Player statistics</div>
-                    <div className='graph-option' style={graphOption === 0 ? { border: '3px solid #1d1a1a', opacity: '1', pointerEvents: 'none' } : {}} onClick={() => setGraphOpition(0)}>Chips won per game</div>
-                    <div className='graph-option' style={graphOption === 1 ? { border: '3px solid #1d1a1a', opacity: '1', pointerEvents: 'none' } : {}} onClick={() => setGraphOpition(1)}>Total chip balance</div>
+                    <OptionButton currentOption={graphOption} setCurrentOption={(type) => setGraphOption(type)} myOption={"Chips won per game"} />
+                    <OptionButton currentOption={graphOption} setCurrentOption={(type) => setGraphOption(type)} myOption={"Total chip balance"} />
                 </div>
                 <div className='graph_wrapper'>
                     <Graph data={getData(humanPlayer.chip_balance_history, graphOption)} />

@@ -88,29 +88,6 @@
     height: calc(100% - 10vh);
 }
 
-.graph-option {
-    width: 100px;
-    height: 9vh;
-    background-color: #FFD078;
-    display: flex;
-    color: #1d1a1a;
-    justify-content: center;
-    align-items: center;
-    margin-right: 10px;
-    border-radius: 10px;
-    font-size: 15px;
-    text-align: center;
-    opacity: 0.7;
-
-    &:hover {
-        cursor: pointer;
-        opacity: 0.4;
-    }
-
-    &:last-child {
-        margin: 0px;
-    }
-}
 
 .graphs-header-text {
     margin-right: 10px;

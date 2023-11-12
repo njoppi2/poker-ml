@@ -3,13 +3,11 @@
 }
 
 .main {
-    background-image: url('../../../public/assets/background.svg');
-    background-size: cover;
-    background-position: center;
     width: 100vw;
     height: 100vh;
     display: flex;
     flex-direction: column;
+    opacity: 1;
 }
 
 .table-outer-wrapper {

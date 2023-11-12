@@ -35,8 +35,8 @@ class GameEncoder(json.JSONEncoder):
         return super().default(obj)
 
 class Game:
-    def __init__(self, websocket, num_ai_players: int, num_human_players: int, initial_chips: int, increase_blind_every: int):
-        self.is_leduc = True
+    def __init__(self, websocket, game_type: str, num_ai_players: int, num_human_players: int, initial_chips: int, increase_blind_every: int):
+        self.is_leduc = game_type == "Leduc"
         self.reset_chips_every_round = True
         self.websocket = websocket
         self.initial_chips = initial_chips
