@@ -2,7 +2,7 @@ import json
 import time
 from player import Player, PlayerTurnState, Players, PlayerEncoder
 from treys import Card, Deck, Evaluator
-from common_types import PlayerGroups, Phases, Encoder
+from common_types import PlayerGroups, PokerPhases, LeducPhases, Encoder
 import random
 from blind_structure import BlindStructure
 from functions import reorder_list
@@ -36,16 +36,17 @@ class GameEncoder(json.JSONEncoder):
 
 class Game:
     def __init__(self, websocket, num_ai_players: int, num_human_players: int, initial_chips: int, increase_blind_every: int):
+        self.is_leduc = True
         self.websocket = websocket
         self.players = Players(self, num_ai_players, num_human_players, initial_chips)
-        self._blind_structure = BlindStructure()
+        self._blind_structure = BlindStructure(self.is_leduc)
         self._increase_blind_every = increase_blind_every
         self.table_cards_to_show_count = None
         self.table_cards: list[Card] = []
         self.round_num = 0
         self.total_pot = 0
         self.phase_pot = 0
-        self.phase_name: Phases = None
+        self.phase_name: PokerPhases = None
         self.min_turn_bet_to_continue: int = 0
 
     async def start_game(self):
@@ -71,7 +72,7 @@ class Game:
     def finish_round(self, someone_broke: bool):
         self.round_num += 1
 
-        if (self.round_num + 1) % self._increase_blind_every == 0:
+        if self._increase_blind_every != 0 and (self.round_num + 1) % self._increase_blind_every == 0:
             self._blind_structure.increase_blind()
         
         self.pass_dealer_chip()
@@ -105,15 +106,19 @@ class Round:
         self.players_in_the_hand: list[Player] = []
         self.is_showdown = False
         self.players.initiate_players_for_round()
-        self.deck = Deck()
+        leduc_deck = [ Card.new('As'), Card.new('Ad'), Card.new('Ks'), Card.new('Kd'), Card.new('Qs'), Card.new('Qd') ] 
+        self.deck = leduc_deck if self.game.is_leduc else Deck().GetFullDeck()
+        random.shuffle(self.deck)
 
         
     async def start(self):
         self.give_players_cards(self.deck)
-        for current_phase in Phases:
+        phases = LeducPhases if self.game.is_leduc else PokerPhases
+        for current_phase in phases:
             print(f"\n{current_phase.value} phase is starting.")
             first_player, table_cards_to_show_count = self.get_phase_variables(current_phase)
-            self.game.table_cards.extend(self.deck.draw(table_cards_to_show_count))
+            new_table_cards = [self.deck.pop() for _ in range(table_cards_to_show_count)]
+            self.game.table_cards.extend(new_table_cards)
             print(f"Table cards are:", self.game.table_cards, "\n")
             phase = Phase(self, current_phase, self.small_blind, self.big_blind, first_player)
             phase_pot = await phase.start()
@@ -125,7 +130,7 @@ class Round:
                 self.players_in_the_hand.extend(players_in_the_hand)
                 self.is_showdown = False
                 break
-            elif current_phase == Phases.RIVER:
+            elif current_phase == PokerPhases.RIVER or current_phase == LeducPhases.FLOP:
                 print("\nShowdown!")
                 
                 self.players_in_the_hand.extend(players_in_the_hand)
@@ -133,13 +138,19 @@ class Round:
             
         self.finish_round()
 
-    def get_phase_variables(self, phase_name: Phases):
-        phase_info = {
-            Phases.PRE_FLOP: {"table_cards_count": 0, "offset": 3},
-            Phases.FLOP: {"table_cards_count": 3, "offset": 1},
-            Phases.TURN: {"table_cards_count": 1, "offset": 1},
-            Phases.RIVER: {"table_cards_count": 1, "offset": 1},
-        }
+    def get_phase_variables(self, phase_name: PokerPhases):
+        if self.game.is_leduc:
+            phase_info = {
+                LeducPhases.PRE_FLOP: {"table_cards_count": 0, "offset": 0},
+                LeducPhases.FLOP: {"table_cards_count": 1, "offset": 1},
+            }
+        else:
+            phase_info = {
+                PokerPhases.PRE_FLOP: {"table_cards_count": 0, "offset": 3},
+                PokerPhases.FLOP: {"table_cards_count": 3, "offset": 1},
+                PokerPhases.TURN: {"table_cards_count": 1, "offset": 1},
+                PokerPhases.RIVER: {"table_cards_count": 1, "offset": 1},
+            }
         
         phase_data = phase_info.get(phase_name, {"table_cards_count": None, "offset": None})
         
@@ -157,7 +168,9 @@ class Round:
             assert player.turn_state != PlayerTurnState.ALL_IN
             if player.is_broke():
                 continue
-            player.cards = deck.draw(2)
+
+            num_cards_to_draw = 1 if self.game.is_leduc else 2
+            player.cards = [deck.pop() for _ in range(num_cards_to_draw)]
             # if player.id < 2:
             #     player.cards = [ Card.new('2s'), Card.new('3s'), ]
             # else:
@@ -224,7 +237,14 @@ class Round:
         evaluator = Evaluator()
 
         for player in self.players_in_the_hand:
-            player.show_down_hand["value"] = evaluator.evaluate(self.game.table_cards, player.cards)
+            if self.game.is_leduc:
+                hand_card_value = Card.get_rank_int(player.cards[0])
+
+                pair_value = 100 if self.is_showdown and Card.get_rank_int(self.game.table_cards[0]) == Card.get_rank_int(player.cards[0]) else 0
+                # lower value is better
+                player.show_down_hand["value"] = - hand_card_value - pair_value
+            else:
+                player.show_down_hand["value"] = evaluator.evaluate(self.game.table_cards, player.cards)
 
         # Sort players by rank from lowest (best hand) to highest (worst hand)
         sorted_players = sorted(self.players_in_the_hand, key=lambda player: player.show_down_hand["value"])
@@ -260,7 +280,7 @@ class Phase:
     """
     There are 4 phases in a round: preflop, flop, turn, river.
     """
-    def __init__(self, round: Round, phase_name: Phases, small_blind: int, big_blind: int, first_player: Player):
+    def __init__(self, round: Round, phase_name: PokerPhases, small_blind: int, big_blind: int, first_player: Player):
         self.round: Round = round
         self.players: Players = round.players
         self.small_blind = small_blind
@@ -273,7 +293,7 @@ class Phase:
         await self.round.game.send_game_state()
 
 
-        if self.round.game.phase_name == Phases.PRE_FLOP:
+        if self.round.game.phase_name == PokerPhases.PRE_FLOP or self.round.game.phase_name == LeducPhases.PRE_FLOP:
             small_blind_player = self.players.get_closest_group_player("non_broke", self.players.current_dealer.id + 1)
             big_blind_player = self.players.get_closest_group_player("non_broke", self.players.current_dealer.id + 2)
             await small_blind_player.pay_blind(self.small_blind)

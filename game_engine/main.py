@@ -4,7 +4,7 @@ import websockets
 
 # Define your game simulation function
 async def simulate_poker_game(websocket):
-    game = Game(websocket=websocket, num_ai_players=3, num_human_players=1, initial_chips=1000, increase_blind_every=10)
+    game = Game(websocket=websocket, num_ai_players=1, num_human_players=1, initial_chips=1200, increase_blind_every=0)
     await game.start_game()
 
 # WebSocket connection handler
