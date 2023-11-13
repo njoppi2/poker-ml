@@ -42,7 +42,7 @@ const Game = ({ gameData, sendMessage }) => {
                 </div>
                 {humanPlayer.turn_state === "PLAYING_TURN" && <div className="action-wrapper">
                     < div className="choices-wrapper">
-                        <div className="choice" onClick={() => sendMessage("Fold")}>Fold</div>
+                        {min !== 0 && <div className="choice" onClick={() => sendMessage("Fold")}>Fold</div>}
                         {min === 0 && <div className="choice" onClick={() => sendMessage("Check")}>Check</div>}
                         {min !== 0 && <div className="choice" onClick={() => sendMessage("Call")}>Call</div>}
                         {min < humanPlayer.chips && <div className="choice" onClick={() => sendMessage("Bet " + sliderValue)}>Bet</div>}
