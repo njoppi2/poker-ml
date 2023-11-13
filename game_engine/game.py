@@ -37,6 +37,7 @@ class Game:
         self.websocket = websocket
         self.initial_chips = initial_chips
         self.players = Players(self, num_ai_players, num_human_players, initial_chips)
+        self.human_player = self.players.get_players("human")[0]
         self._blind_structure = BlindStructure(self.is_leduc)
         self._increase_blind_every = increase_blind_every
         self.table_cards_to_show_count = None
@@ -100,6 +101,9 @@ class Round:
     """
     def __init__(self, game: Game, small_blind: int, big_blind: int):
         self.game = game
+        self.history = []
+        self.human_player_hand_str = None
+        self.table_str = None
         self.players = game.players
         self.small_blind = small_blind
         self.big_blind = big_blind
@@ -120,6 +124,7 @@ class Round:
             first_player, table_cards_to_show_count = self.get_phase_variables(current_phase)
             new_table_cards = [self.deck.pop() for _ in range(table_cards_to_show_count)]
             self.game.table_cards.extend(new_table_cards)
+            self.table_str = [Card.int_to_str(card) for card in self.game.table_cards]
             print(f"Table cards are:", self.game.table_cards, "\n")
             phase = Phase(self, current_phase, self.small_blind, self.big_blind, first_player)
             phase_pot = await phase.start()
@@ -172,12 +177,8 @@ class Round:
 
             num_cards_to_draw = 1 if self.game.is_leduc else 2
             player.cards = [deck.pop() for _ in range(num_cards_to_draw)]
-            # if player.id < 2:
-            #     player.cards = [ Card.new('2s'), Card.new('3s'), ]
-            # else:
-            #     player.cards = [ Card.new('Ah'), Card.new('Kd'), ]
-
             print(player)
+        self.human_player_cards_str = [Card.int_to_str(card) for card in self.game.human_player.cards] 
 
     def reset_round_player(self, player: Player):
         player.reset_round_player()
@@ -349,6 +350,7 @@ class Phase:
 
     def finish_phase(self):
         [self.reset_phase_player(player) for player in self.players.get_players("non_broke")]
+        self.round.history.append("/")
 
 class Turn:
     """
@@ -366,14 +368,16 @@ class Turn:
         self.player.set_turn_state(PlayerTurnState.PLAYING_TURN)
         await self.phase.round.game.send_game_state()
 
-        bet = await self.player.play(self.phase.round.game.min_turn_value_to_continue, self.phase.round.game.min_bet)
+        bet, action = await self.player.play(self.phase.round.game.min_turn_value_to_continue, self.phase.round.game.min_bet)
 
-        await self.finish_turn()
+        await self.finish_turn(action)
         return bet
     
     def get_current_player_phase_bet(self):
         return self.current_player_phase_bet
     
-    async def finish_turn(self):
+    async def finish_turn(self, action):
+        self.phase.round.history.append(action)
         self.player.set_turn_bet_value(0)
         self.phase.round.game.min_turn_value_to_continue = 0
+        print(self.phase.round.history)

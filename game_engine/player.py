@@ -168,6 +168,7 @@ class Player:
     async def play(self, min_turn_value_to_continue: int, min_bet: int):
         if self.is_robot:
             await self.ai_play(min_turn_value_to_continue, min_bet)
+            action = self.get_action(min_turn_value_to_continue)
         else:
             while self.get_turn_state() == PlayerTurnState.PLAYING_TURN:
                 try:
@@ -190,8 +191,7 @@ class Player:
                                 if self.get_turn_state() == PlayerTurnState.PLAYING_TURN:
                                     self.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
                                     break
-                            else:
-                                print(f"You must bet at least the minimum bet to continue, which is {min_turn_value_to_continue}.")
+                        assert is_action_legal
                     elif action == "Fold":
                         self.set_turn_state(PlayerTurnState.FOLDED)
                         break
@@ -200,10 +200,41 @@ class Player:
                 except websockets.exceptions.ConnectionClosedOK:
                     break
         
+        assert self.get_action(min_turn_value_to_continue) == action
         self.set_played_current_phase(True)
         assert self.get_turn_state() != PlayerTurnState.PLAYING_TURN
-        return self.get_turn_bet_value()
+        return self.get_turn_bet_value(), self.parse_relative_bets(action)   
+
+    def parse_relative_bets(self, action: str):
+        if action.startswith("Bet"):
+            _, value = self.is_valid_bet_format(action)
+            return "Bet " + str(self.round_bet_value)
+        else:
+            return action
+        
+    def parse_action_to_info_set(self, action: str):
+        if action == "Fold":
+            return "f"
+        elif action == "Check":
+            return "k"
+        elif action == "Call":
+            return "c"
+        elif action.startswith("Bet"):
+            _, value = self.is_valid_bet_format(action)
+            return "r" + str(value)
+        else:
+            raise Exception("Invalid action")
     
+    def get_action(self, min_turn_value_to_continue) -> str:
+        if self.turn_bet_value < min_turn_value_to_continue:
+            return "Fold"
+        elif self.turn_bet_value == 0:
+            return "Check"
+        elif self.turn_bet_value == min_turn_value_to_continue:
+            return "Call"
+        elif self.turn_bet_value > min_turn_value_to_continue:
+            return f"Bet {self.turn_bet_value}"
+        
     async def make_bet_up_to(self, amount: int) -> bool:
         if self.chips >= amount:
             return await self.make_bet(amount)
@@ -215,7 +246,7 @@ class Player:
         if self.chips >= amount:
             self.calculate_is_all_in(amount)
 
-            self.set_turn_bet_value(self.turn_bet_value + amount)
+            self.set_turn_bet_value(amount)
             self.set_phase_bet_value(self.phase_bet_value + amount)
             self.set_round_bet_value(self.round_bet_value + amount)
             self.remove_chips(amount)
@@ -311,6 +342,8 @@ class Players:
             condition = lambda player: player.is_not_broke() and player.get_turn_state() != PlayerTurnState.FOLDED
         elif group == "all_in":
             condition = lambda player: player.get_turn_state() == PlayerTurnState.ALL_IN
+        elif group == "human":
+            condition = lambda player: player.is_robot == False
 
         return [player for player in self.initial_players if condition(player)]
 
