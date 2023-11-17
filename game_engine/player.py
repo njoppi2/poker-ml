@@ -10,6 +10,9 @@ import time
 import websockets
 import json
 import re
+import pickle
+import os
+import math
 
 
 class PlayerTurnState(Enum):
@@ -19,7 +22,44 @@ class PlayerTurnState(Enum):
     FOLDED = "FOLDED"
     ALL_IN = "ALL_IN"
 
-import json
+current_directory = os.path.dirname(os.path.abspath(__file__))
+model_name = "IOu-mccfr-6cards-11maxbet-EPcfr0_0-mRW0_0-iter100000000"
+blueprints_directory_pA = os.path.join(current_directory, f'../ia/analysis/blueprints/important_blueprints/{model_name}.pkl')
+with open(blueprints_directory_pA, 'rb') as f:
+    nash_equilibrium_model = pickle.load(f)
+
+def action_from_code(action_code, selected_action_index, last_action):
+    """Convert an action code to its string representation."""
+    if last_action.isdigit():
+        dict = {0: 'f',
+               1: 'c'}            
+    else:
+        dict = {0: 'k'} 
+
+    if selected_action_index in dict:
+        action = dict[selected_action_index]
+    else:
+        action = "r" + str(action_code) + "00"
+    return action
+
+def decide_next_action(infoset):
+    # Consult our strategy table
+    action_data = nash_equilibrium_model.get(infoset)
+    
+    # If we don't have data for this match_state, default to 'c'
+    if action_data is None:
+        return "c"
+    
+    actions, probabilities = action_data
+    selected_action_code = random.choices(actions, weights=probabilities)[0]
+
+    selected_action_index = actions.index(selected_action_code)
+    try:
+        last_action = infoset.split(":|")[0][-1]
+    except IndexError:
+        last_action = 'y'
+    return action_from_code(selected_action_code, selected_action_index, last_action)
+
 
 class PlayerEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -139,6 +179,36 @@ class Player:
             except ValueError:
                 print("Invalid input. Please enter a valid integer.")
 
+    async def nash_ai_play(self, min_turn_value_to_continue: int, min_bet: int, human_player_cards: list, table_cards: list, history: list):
+        info_set = self.get_info_set(human_player_cards, table_cards, history)
+        action = decide_next_action(info_set)
+        if action == "f":
+            self.set_turn_state(PlayerTurnState.FOLDED)
+        elif action == "c":
+            if await self.make_bet(min_turn_value_to_continue):
+                if self.get_turn_state() == PlayerTurnState.PLAYING_TURN:
+                    self.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
+                else:
+                    raise Exception("Invalid action")
+            self.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
+        elif action == "k":
+            if await self.make_bet(0):
+                if self.get_turn_state() == PlayerTurnState.PLAYING_TURN:
+                    self.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
+                else:
+                    raise Exception("Invalid action")
+            self.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
+        elif action.startswith("r"):
+            value = max(int(action[1:]) - min_turn_value_to_continue, self.chips)
+            print("value: ", value)
+            if await self.make_bet(value):
+                if self.get_turn_state() == PlayerTurnState.PLAYING_TURN:
+                    self.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
+            self.make_bet_up_to(value)
+        else:
+            raise Exception("Invalid action")
+        print("action: ", action)
+
     async def ai_play(self, min_turn_value_to_continue: int, min_bet: int):
         time.sleep(0.3)
         print("min_turn_value_to_continue: ", min_turn_value_to_continue)
@@ -165,9 +235,10 @@ class Player:
                 self.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
         self.set_played_current_phase(True)
 
-    async def play(self, min_turn_value_to_continue: int, min_bet: int):
+    async def play(self, min_turn_value_to_continue: int, min_bet: int, human_player_cards: list, table_cards: list, history: list):
         if self.is_robot:
-            await self.ai_play(min_turn_value_to_continue, min_bet)
+            # await self.ai_play(min_turn_value_to_continue, min_bet)
+            await self.nash_ai_play(min_turn_value_to_continue, min_bet, human_player_cards, table_cards, history)
             action = self.get_action(min_turn_value_to_continue)
         else:
             while self.get_turn_state() == PlayerTurnState.PLAYING_TURN:
@@ -202,13 +273,47 @@ class Player:
         
         assert self.get_action(min_turn_value_to_continue) == action
         self.set_played_current_phase(True)
-        assert self.get_turn_state() != PlayerTurnState.PLAYING_TURN
+        assert self.get_turn_state() != PlayerTurnState.PLAYING_TURN # aqui
         return self.get_turn_bet_value(), self.parse_relative_bets(action)   
 
     def parse_relative_bets(self, action: str):
         if action.startswith("Bet"):
             _, value = self.is_valid_bet_format(action)
             return "Bet " + str(self.round_bet_value)
+        else:
+            return action
+        
+    def get_info_set(self, human_player_cards: list, table_cards: list, history: list):
+        parsed_human_player_cards = ''.join(map(lambda s: s[0], human_player_cards))
+        parsed_table_cards = ''.join([card[0] for card in table_cards])
+
+        history_with_bets_rounded_up = [self.round_up_bets(action) for action in history]
+        history_abreviated = [self.parse_action_to_info_set(action) for action in history_with_bets_rounded_up]
+        history_with_hiphen_nodes = self.add_hiphen_to_history(history_abreviated)
+        parsed_history = ''.join(history_with_hiphen_nodes)
+
+        return parsed_history + ":|" + parsed_human_player_cards + ("/" if parsed_table_cards else "") + parsed_table_cards
+        
+    def add_hiphen_to_history(self, history: list):
+        if "/" in history:
+            new_history = history.copy()
+            items_until_slash = []
+            for item in history:
+                if item == "/":
+                    break
+                items_until_slash.append(item)
+
+            if len(items_until_slash) % 2 == 1:
+                new_history.insert(history.index("/"), "-")
+            return new_history
+        else:
+            return history
+
+        
+    def round_up_bets(self, action: str):
+        if action.startswith("Bet"):
+            _, value = self.is_valid_bet_format(action)
+            return "Bet " + str(math.ceil(value/100) * 100)
         else:
             return action
         
@@ -219,7 +324,11 @@ class Player:
             return "k"
         elif action == "Call":
             return "c"
-        elif action.startswith("Bet"):
+        elif action == "/":
+            return "/"
+        elif action == "-":
+            return "-"
+        elif self.is_valid_bet_format(action)[0] == "Bet":
             _, value = self.is_valid_bet_format(action)
             return "r" + str(value)
         else:
