@@ -44,8 +44,6 @@ class ModLeducTrainer:
             self.Actions.append({"name": f"r{i}", "value": i})
         self.is_bet_relative = is_bet_relative
 
-        # self.node_history_mapOO = HistoryNode('', '')
-        self.node_history_mapOO = {}
         self.node_history_map = {}
         self.node_history_mapA = self.node_history_map
         self.node_history_mapB = self.node_history_map
@@ -87,7 +85,8 @@ class ModLeducTrainer:
                 action_values, strategy = value
                 actions = list(filter(lambda a: a['value'] in action_values, self.Actions))
                 node_history_mapA[key] = InfoSetNode(key, actions, strategy)
-            self.node_history_mapA = MappingProxyType(node_history_mapA)
+            # self.node_history_mapA = MappingProxyType(node_history_mapA)
+            self.node_history_mapA = node_history_mapA
         if fileB is not None:
             node_history_mapB = {}
             blueprints_directory_pB = os.path.join(current_directory, f'../analysis/blueprints/{fileB}.pkl')
@@ -97,7 +96,8 @@ class ModLeducTrainer:
                 action_values, strategy = value
                 actions = list(filter(lambda a: a['value'] in action_values, self.Actions))
                 node_history_mapB[key] = InfoSetNode(key, actions, strategy)
-            self.node_history_mapB = MappingProxyType(node_history_mapB)
+            # self.node_history_mapB = MappingProxyType(node_history_mapB)
+            self.node_history_mapB = node_history_mapB
 
     def log(self, log_file):
         create_file(log_file)
@@ -159,8 +159,8 @@ class ModLeducTrainer:
                 initial_player = (chips, turn_bet_value, round_bet_value, played_current_phase)
                 players = (initial_player, initial_player)
                 is_exploring_phase = i < self.exploring_phase * iterations
-                iteration_reward = self.nash_equilibrium_algorithm(self.cards, "", p0, p1, players, 'preflop', is_exploring_phase, model_A_is_p0, None, self.node_history_mapOO, self.node_history_mapOO)
-                sum_of_rewards[0] = model_A_is_p0 * (iteration_reward * (not is_exploring_phase))
+                iteration_reward = self.nash_equilibrium_algorithm(self.cards, "", p0, p1, players, 'preflop', is_exploring_phase, model_A_is_p0, None, self.node_history_mapA, self.node_history_mapB)
+                sum_of_rewards[0] += model_A_is_p0 * (iteration_reward * (not is_exploring_phase))
                 sum_of_rewards[1] += (not model_A_is_p0) * (iteration_reward * (not is_exploring_phase))
                 
                 if i % 1 == 0: #quando fazer o log
@@ -233,12 +233,15 @@ class ModLeducTrainer:
         if not is_current_model_fixed:
             # assert node_history_mapA == node_history_mapB
             # return node_history_mapA.next_histories.setdefault(my_cards, InfoSetNode(my_cards, possible_actions, None))
-            return self.node_history_map.setdefault(info_set, InfoSetNode(info_set, '', possible_actions, None))
+            return self.node_history_map.setdefault(info_set, InfoSetNode(info_set, possible_actions, None))
         else:
+            num_of_possible_actions = len(possible_actions)
+            filler_strategy = [1/num_of_possible_actions for _ in range(num_of_possible_actions)]
+
             if is_model_B:
-                return node_history_mapB[info_set]
+                return self.node_history_mapB.setdefault(info_set, InfoSetNode(info_set, possible_actions, filler_strategy))
             else:
-                return node_history_mapA[info_set]
+                return self.node_history_mapA.setdefault(info_set, InfoSetNode(info_set, possible_actions, filler_strategy))
             
     # def create_history_node(self, node_history_mapA, node_history_mapB, bet_result):
     #     historyA = node_history_mapA.full_history
@@ -323,9 +326,8 @@ class ModLeducTrainer:
                         action_index = node.actions.index(action)
                         is_chosen_action = action_index == chosen_action_index
                         # other_node_history_mapA, other_node_history_mapB = self.create_history_node(node_history_mapA, node_history_mapB, bet_result)
-                        other_node_history_mapA, other_node_history_mapB = 0,0
                         updated_players, bet_result = set_bet_value(player, players, action["value"], next_phase_started, self.is_bet_relative, possible_actions)
-                        args = (cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase, model_A_is_p0, bet_result, alternative_play if is_chosen_action else player, other_node_history_mapA, other_node_history_mapB)
+                        args = (cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase, model_A_is_p0, bet_result, alternative_play if is_chosen_action else player, node_history_mapA, node_history_mapB)
                         arguments.append(args)
                     results = executor.map(self.perform_action_wrapper, arguments)
                 # Process results
@@ -337,9 +339,8 @@ class ModLeducTrainer:
                     action_index = node.actions.index(action)
                     is_chosen_action = action_index == chosen_action_index
                     # other_node_history_mapA, other_node_history_mapB = self.create_history_node(node_history_mapA, node_history_mapB, bet_result)
-                    other_node_history_mapA, other_node_history_mapB = 0,0
                     updated_players, bet_result = set_bet_value(player, players, action["value"], next_phase_started, self.is_bet_relative, possible_actions)
-                    args = (cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase, model_A_is_p0, bet_result, alternative_play if is_chosen_action else player, other_node_history_mapA, other_node_history_mapB)
+                    args = (cards, updated_history, p0, p1, updated_players, updated_phase, strategy, player, action, action_index, is_exploring_phase, model_A_is_p0, bet_result, alternative_play if is_chosen_action else player, node_history_mapA, node_history_mapB)
                     node_action_utility = self.perform_action(*args)
                     node_actions_utilities[action_index] = node_action_utility
 
@@ -390,7 +391,7 @@ if __name__ == "__main__":
 
     random.seed(42)
 
-    _iterations = 1002
+    _iterations = 200000
     _algorithm = 'mccfr'
     cards = [Card.Q, Card.Q, Card.K, Card.K, Card.A, Card.A]
     _exploring_phase = 0.0
@@ -399,8 +400,8 @@ if __name__ == "__main__":
     """ Be careful when creating a model by playing against fixed strategies, because your model might not have all info_sets """
     _fixed_strategyA = None
     _fixed_strategyB = None
-    # _fixed_strategyA = 'Cyz-cfr-6cards-2maxbet-EPcfr0-mRW0_0001-iter10000'
-    # _fixed_strategyB = 'pbD-Cyz-mccfr-6cards-2maxbet-EPcfr0-mRW0_0001-iter100000'
+    _fixed_strategyA = 'DYy42-mccfr-6cards-11maxbet-EPcfr0_0-mRW0_0-iter20000000'
+    _fixed_strategyB = 'DYy42-mccfr-6cards-11maxbet-EPcfr0_0-mRW0_0-iter20000000'
     total_chips = 12
     sb, bb = 1, 1
     is_bet_relative = False

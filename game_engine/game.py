@@ -368,7 +368,7 @@ class Turn:
         self.player.set_turn_state(PlayerTurnState.PLAYING_TURN)
         await self.phase.round.game.send_game_state()
 
-        bet, action = await self.player.play(self.phase.round.game.min_turn_value_to_continue, self.phase.round.game.min_bet)
+        bet, action = await self.player.play(self.phase.round.game.min_turn_value_to_continue, self.phase.round.game.min_bet, self.phase.round.human_player_cards_str, self.phase.round.table_str, self.phase.round.history)
 
         await self.finish_turn(action)
         return bet

@@ -25,13 +25,12 @@ class HistoryNode:
 
 class InfoSetNode:
     """ A node is an information set, which is the cards of the player and the history of the game."""
-    def __init__(self, cards, full_history, actions, strategy):
+    def __init__(self, info_set, actions, strategy):
 
         self.actions = list(actions)
         self.actions_names = {}
         self.num_actions = len(actions)
-        self.info_set = cards
-        self.full_history = full_history
+        self.info_set = info_set
         # The regret and strategies of a node refer to the last action taken to reach the node
         self.regret_sum = [0.0] * self.num_actions
         self.strategy = [0.0] * self.num_actions if strategy is None else strategy
