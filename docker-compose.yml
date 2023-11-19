@@ -6,6 +6,6 @@ services:
     ports:
       - '3000:3000'
   poker-backend:
-    build: './game-engine'
+    build: './game_engine'
     ports:
       - '3002:3002'

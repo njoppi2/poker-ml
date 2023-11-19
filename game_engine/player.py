@@ -24,7 +24,7 @@ class PlayerTurnState(Enum):
 
 current_directory = os.path.dirname(os.path.abspath(__file__))
 model_name = "IOu-mccfr-6cards-11maxbet-EPcfr0_0-mRW0_0-iter100000000"
-blueprints_directory_pA = os.path.join(current_directory, f'../ia/analysis/blueprints/important_blueprints/{model_name}.pkl')
+blueprints_directory_pA = os.path.join(current_directory, f'./ia/analysis/blueprints/important_blueprints/{model_name}.pkl')
 with open(blueprints_directory_pA, 'rb') as f:
     nash_equilibrium_model = pickle.load(f)
 
@@ -204,7 +204,7 @@ class Player:
             if await self.make_bet(value):
                 if self.get_turn_state() == PlayerTurnState.PLAYING_TURN:
                     self.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
-            self.make_bet_up_to(value)
+            await self.make_bet_up_to(value)
         else:
             raise Exception("Invalid action")
         print("action: ", action)
