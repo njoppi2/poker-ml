@@ -54,9 +54,10 @@ def decide_next_action(infoset):
     selected_action_code = random.choices(actions, weights=probabilities)[0]
 
     selected_action_index = actions.index(selected_action_code)
-    try:
-        last_action = infoset.split(":|")[0][-1]
-    except IndexError:
+    split_result = infoset.split(":|")
+    if len(split_result) > 0 and split_result[0]:
+        last_action = split_result[0][-1]
+    else:
         last_action = 'y'
     return action_from_code(selected_action_code, selected_action_index, last_action)
 
@@ -179,8 +180,8 @@ class Player:
             except ValueError:
                 print("Invalid input. Please enter a valid integer.")
 
-    async def nash_ai_play(self, min_turn_value_to_continue: int, min_bet: int, human_player_cards: list, table_cards: list, history: list):
-        info_set = self.get_info_set(human_player_cards, table_cards, history)
+    async def nash_ai_play(self, min_turn_value_to_continue: int, min_bet: int, ai_player_cards: list, table_cards: list, history: list):
+        info_set = self.get_info_set(ai_player_cards, table_cards, history)
         action = decide_next_action(info_set)
         if action == "f":
             self.set_turn_state(PlayerTurnState.FOLDED)
@@ -188,25 +189,23 @@ class Player:
             if await self.make_bet(min_turn_value_to_continue):
                 if self.get_turn_state() == PlayerTurnState.PLAYING_TURN:
                     self.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
-                else:
-                    raise Exception("Invalid action")
-            self.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
+                elif self.get_turn_state() != PlayerTurnState.ALL_IN:
+                    raise Exception("Invalid action: ", action)
         elif action == "k":
             if await self.make_bet(0):
                 if self.get_turn_state() == PlayerTurnState.PLAYING_TURN:
                     self.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
                 else:
-                    raise Exception("Invalid action")
+                    raise Exception("Invalid action: ", action)
             self.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
         elif action.startswith("r"):
-            value = max(int(action[1:]) - min_turn_value_to_continue, self.chips)
+            value = min(int(action[1:]) - min_turn_value_to_continue, self.chips)
             print("value: ", value)
             if await self.make_bet(value):
                 if self.get_turn_state() == PlayerTurnState.PLAYING_TURN:
                     self.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
-            await self.make_bet_up_to(value)
         else:
-            raise Exception("Invalid action")
+            raise Exception("Invalid action: ", action)
         print("action: ", action)
 
     async def ai_play(self, min_turn_value_to_continue: int, min_bet: int):
@@ -235,10 +234,10 @@ class Player:
                 self.set_turn_state(PlayerTurnState.WAITING_FOR_TURN)
         self.set_played_current_phase(True)
 
-    async def play(self, min_turn_value_to_continue: int, min_bet: int, human_player_cards: list, table_cards: list, history: list):
+    async def play(self, min_turn_value_to_continue: int, min_bet: int, ai_player_cards: list, table_cards: list, history: list):
         if self.is_robot:
             # await self.ai_play(min_turn_value_to_continue, min_bet)
-            await self.nash_ai_play(min_turn_value_to_continue, min_bet, human_player_cards, table_cards, history)
+            await self.nash_ai_play(min_turn_value_to_continue, min_bet, ai_player_cards, table_cards, history)
             action = self.get_action(min_turn_value_to_continue)
         else:
             while self.get_turn_state() == PlayerTurnState.PLAYING_TURN:
@@ -453,6 +452,8 @@ class Players:
             condition = lambda player: player.get_turn_state() == PlayerTurnState.ALL_IN
         elif group == "human":
             condition = lambda player: player.is_robot == False
+        elif group == "not_human":
+            condition = lambda player: player.is_robot == True
 
         return [player for player in self.initial_players if condition(player)]
 
