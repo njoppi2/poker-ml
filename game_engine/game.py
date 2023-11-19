@@ -37,7 +37,7 @@ class Game:
         self.websocket = websocket
         self.initial_chips = initial_chips
         self.players = Players(self, num_ai_players, num_human_players, initial_chips)
-        self.human_player = self.players.get_players("human")[0]
+        self.ai_player = self.players.get_players("not_human")[0]
         self._blind_structure = BlindStructure(self.is_leduc)
         self._increase_blind_every = increase_blind_every
         self.table_cards_to_show_count = None
@@ -178,7 +178,7 @@ class Round:
             num_cards_to_draw = 1 if self.game.is_leduc else 2
             player.cards = [deck.pop() for _ in range(num_cards_to_draw)]
             print(player)
-        self.human_player_cards_str = [Card.int_to_str(card) for card in self.game.human_player.cards] 
+        self.ai_player_cards_str = [Card.int_to_str(card) for card in self.game.ai_player.cards] 
 
     def reset_round_player(self, player: Player):
         player.reset_round_player()
@@ -368,7 +368,7 @@ class Turn:
         self.player.set_turn_state(PlayerTurnState.PLAYING_TURN)
         await self.phase.round.game.send_game_state()
 
-        bet, action = await self.player.play(self.phase.round.game.min_turn_value_to_continue, self.phase.round.game.min_bet, self.phase.round.human_player_cards_str, self.phase.round.table_str, self.phase.round.history)
+        bet, action = await self.player.play(self.phase.round.game.min_turn_value_to_continue, self.phase.round.game.min_bet, self.phase.round.ai_player_cards_str, self.phase.round.table_str, self.phase.round.history)
 
         await self.finish_turn(action)
         return bet
