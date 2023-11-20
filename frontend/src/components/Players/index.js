@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import './styles.css';
 import Cards from '../Cards';
 
 const Player = ({ players }) => {
+    const [isCardVisible, setIsCardVisible] = useState(false);
     const initial_players = players?.initial_players || [];
     const playerPosition = [
         { top: 'calc(50% - 45px)', left: `calc(4% + 10px)` },
@@ -50,9 +51,16 @@ const Player = ({ players }) => {
                         <div>{playerStateMessage[player.turn_state]}</div>
                         <div>Bet: {player.phase_bet_value}</div>
                         {/* Add other player-related information */}
-                        <div className='cards' style={player.is_robot ? {} : { display: 'None' }}>
-                            <Cards cards={player.cards} height={30} />
-                        </div>
+                        {isCardVisible &&
+                            <div className='cards' style={player.is_robot ? {} : { display: 'None' }}>
+                                <Cards cards={player.cards} height={30} />
+                            </div>
+                        }
+                        {player.is_robot &&
+                            <div className='ai-player-toggle-cards' onClick={() => setIsCardVisible(prev => !prev)}>
+                                Toggle Cards
+                            </div>
+                        }
                     </div>
                 ))
             }
