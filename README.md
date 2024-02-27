@@ -1,5 +1,5 @@
 # Poker-ml
-Este repositório apresenta tanto o nosso algoritmo de treinamento da IA, contido na pasta "game_engine/ia", tanto a nossa aplicação web que permite jogar o HUNL Leduc Poker contra ela.
+Este repositório apresenta a nossa Monografia do TCC, o nosso algoritmo de treinamento da IA, contido na pasta "game_engine/ia", e a nossa aplicação web que permite jogar o HUNL Leduc Poker contra ela.
 
 <br />
 <br />
