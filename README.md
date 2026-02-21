@@ -9,8 +9,8 @@ Poker AI project from our undergraduate final project (TCC), combining strategy 
 ## Snapshot
 
 <p align="center">
-  <img src="docs/images/ui-snapshot.png" alt="Poker ML frontend start screen with game mode selection" width="430" />
-  <img src="frontend/public/assets/table.svg" alt="Poker table board asset used in gameplay UI" width="430" />
+  <img src="docs/images/ui-snapshot.png" alt="Poker ML frontend start screen with game mode selection" width="300" />
+  <img src="frontend/public/assets/table.svg" alt="Poker table board asset used in gameplay UI" width="560" />
 </p>
 
 ## Problem
