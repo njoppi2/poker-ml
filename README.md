@@ -68,7 +68,7 @@ Frontend:
 ```bash
 cd frontend
 npm install
-npm start
+npm run dev
 ```
 
 ## Testing
