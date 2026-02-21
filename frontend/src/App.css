@@ -6,7 +6,7 @@
     flex-direction: column;
     width: 100vw;
     height: 100vh;
-    background-image: url('/public/assets/background.svg');
+    background-image: url('/assets/background.svg');
     background-size: cover;
     background-position: center;
     position: relative;
@@ -23,7 +23,7 @@
 @media (prefers-reduced-motion: no-preference) {
     .App-logo {
         animation: App-logo-spin infinite 7s linear;
-        background-image: url('/public/assets/chip.svg');
+        background-image: url('/assets/chip.svg');
         background-repeat: no-repeat;
         background-size: contain;
     }
