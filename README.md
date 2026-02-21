@@ -1,28 +1,34 @@
 # Poker ML
 
-Poker AI project developed during our undergraduate final project (TCC), with:
+[![CI](https://img.shields.io/github/actions/workflow/status/njoppi2/poker-ml/ci.yml?branch=main&label=CI)](https://github.com/njoppi2/poker-ml/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/njoppi2/poker-ml)](LICENSE)
+[![Last Commit](https://img.shields.io/github/last-commit/njoppi2/poker-ml)](https://github.com/njoppi2/poker-ml/commits/main)
 
-- training and analysis artifacts for poker strategies,
-- a Python websocket game engine,
-- and a React frontend to play against the AI.
+Poker AI project from our undergraduate final project (TCC), combining strategy experimentation, a Python websocket game engine, and a React frontend for interactive play.
 
-The monograph is available in `TCC_Monografia.pdf`.
+## Snapshot
+
+![Poker table UI asset](frontend/public/assets/table.svg)
+
+## Problem
+
+Provide a compact research and experimentation environment to simulate poker rounds, evaluate agent behavior, and expose game state through a real-time UI.
 
 ## Tech Stack
 
-- Python (game engine + AI routines)
-- React frontend
+- Python (game engine and AI routines)
+- React frontend (Vite)
 - WebSockets
 - Docker / Docker Compose
 
 ## Repository Layout
 
-- `game_engine/`: game logic, websocket server, and AI-related modules
+- `game_engine/`: game logic, websocket server, and AI modules
 - `frontend/`: web interface
-- `tests/`: API interaction script and test utilities
-- `TCC_Monografia.pdf`: project write-up
+- `tests/`: test utilities and API interaction script
+- `TCC_Monografia.pdf`: monograph
 
-## Quickstart (Docker)
+## Quickstart
 
 From repository root:
 
@@ -53,7 +59,7 @@ or:
 docker compose down
 ```
 
-## Running Services Manually
+## Run Services Manually
 
 Backend:
 
@@ -71,28 +77,39 @@ npm install
 npm run dev
 ```
 
-## Testing
+## Validation and CI
 
-Utility/unit tests:
+Local checks:
 
 ```bash
 PYTHONPATH=. python -m unittest discover -s tests -p "test_*.py"
+cd frontend && npm ci && npm run build
 ```
 
-API interaction script:
+CI (`.github/workflows/ci.yml`) validates:
 
-```bash
-python tests/sample_api.py --help
-```
+- Python syntax compilation in `game_engine`
+- Backend unit tests in `tests/`
+- Frontend production build
 
-## What This Project Demonstrates
+## Results
 
-- multi-street poker simulation support (including Leduc and Texas Hold'em modes),
-- agent-vs-human game loop over websocket events,
-- AI training/blueprint experimentation for decision-making.
+- Supports Leduc and Texas Hold'em modes.
+- Runs full agent-vs-human round flow over websocket events.
+- Includes baseline test suite and frontend build gate.
 
-## Limitations / Next Improvements
+## Limitations
 
-- Move large training artifacts to GitHub Releases or Git LFS.
-- Add reproducible training entrypoints and experiment tracking metadata.
-- Add automated tests for websocket game flow.
+- Large training artifacts are still in-repo.
+- Training runs are not fully reproducible from one CLI entrypoint.
+- Websocket end-to-end test coverage is still limited.
+
+## Roadmap
+
+- Move large artifacts to GitHub Releases/LFS.
+- Add deterministic websocket integration tests.
+- Add experiment tracking metadata for training runs.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
