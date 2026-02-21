@@ -6,6 +6,7 @@ from common_types import PlayerGroups, PokerPhases, LeducPhases, Encoder
 import random
 from blind_structure import BlindStructure
 from functions import reorder_list
+from random_control import build_rng, resolve_random_seed
 from typing import List, Literal, Tuple
 from collections import defaultdict
 
@@ -31,11 +32,25 @@ class GameEncoder(json.JSONEncoder):
         return super().default(obj)
 
 class Game:
-    def __init__(self, websocket, game_type: str, num_ai_players: int, num_human_players: int, initial_chips: int, increase_blind_every: int):
+    def __init__(
+        self,
+        websocket,
+        game_type: str,
+        num_ai_players: int,
+        num_human_players: int,
+        initial_chips: int,
+        increase_blind_every: int,
+        random_seed: int | None = None,
+    ):
         self.is_leduc = game_type == "Leduc"
         self.reset_chips_every_round = True
         self.websocket = websocket
         self.initial_chips = initial_chips
+        self.random_seed = resolve_random_seed(random_seed)
+        self.rng = build_rng(self.random_seed)
+        if self.random_seed is not None:
+            # Keep legacy random-based paths deterministic for tests/replayability.
+            random.seed(self.random_seed)
         self.players = Players(self, num_ai_players, num_human_players, initial_chips)
         self.ai_player = self.players.get_players("not_human")[0]
         self._blind_structure = BlindStructure(self.is_leduc)
@@ -113,7 +128,7 @@ class Round:
         self.players.initiate_players_for_round()
         leduc_deck = [ Card.new('As'), Card.new('Ad'), Card.new('Ks'), Card.new('Kd'), Card.new('Qs'), Card.new('Qd') ] 
         self.deck = leduc_deck if self.game.is_leduc else Deck().GetFullDeck()
-        random.shuffle(self.deck)
+        self.game.rng.shuffle(self.deck)
 
         
     async def start(self):
@@ -222,7 +237,7 @@ class Round:
                 remaining_players_to_receive_count = len(remaining_players_to_receive)
                 chips_remaining = chips_for_remaining_players % remaining_players_to_receive_count
                 # Choose a random group player to give the remaining chips
-                random_player = random.choice(remaining_players_to_receive)
+                random_player = self.game.rng.choice(remaining_players_to_receive)
                 random_player.add_chips(chips_remaining)
                 chips_for_remaining_players -= chips_remaining
 

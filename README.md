@@ -92,6 +92,21 @@ CI (`.github/workflows/ci.yml`) validates:
 - Backend unit tests in `tests/`
 - Frontend production build
 
+## Deterministic Mode (Backend)
+
+For reproducible backend behavior during tests/debugging, set:
+
+```bash
+export POKER_ML_RANDOM_SEED=42
+```
+
+This seed is now used for core game random operations such as deck shuffling and tie-break chip assignment.
+
+## WebSocket Smoke Coverage
+
+- `tests/test_websocket_smoke.py` validates that websocket start messages trigger the correct game mode.
+- `tests/test_random_control.py` validates deterministic seed handling.
+
 ## Results
 
 - Supports Leduc and Texas Hold'em modes.
