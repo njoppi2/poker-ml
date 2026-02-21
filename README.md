@@ -6,6 +6,8 @@
 
 Poker AI project from our undergraduate final project (TCC), combining strategy experimentation, a Python websocket game engine, and a React frontend for interactive play.
 
+Live frontend: <https://njoppi2.github.io/poker-ml/>
+
 ## Snapshot
 
 <p align="center">
