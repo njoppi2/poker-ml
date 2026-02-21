@@ -8,7 +8,9 @@ Poker AI project from our undergraduate final project (TCC), combining strategy 
 
 ## Snapshot
 
-![Poker table UI asset](frontend/public/assets/table.svg)
+<p align="center">
+  <img src="docs/images/ui-snapshot.png" alt="Poker ML frontend start screen with game mode selection" width="900" />
+</p>
 
 ## Problem
 
