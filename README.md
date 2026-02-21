@@ -1,36 +1,84 @@
-# Poker-ml
-Este repositório apresenta a nossa Monografia do TCC, o nosso algoritmo de treinamento da IA, contido na pasta "game_engine/ia", e a nossa aplicação web que permite jogar o HUNL Leduc Poker contra ela.
+# Poker ML
 
-<br />
-<br />
+Poker AI project developed during our undergraduate final project (TCC), with:
 
-## Rodando interface WEB:
-(Primeiro é necessário ter a Docker Engine instalada)
+- training and analysis artifacts for poker strategies,
+- a Python websocket game engine,
+- and a React frontend to play against the AI.
 
-A partir do root do projeto, execute os seguintes comandos para iniciar a aplicação:
-```
+The monograph is available in `TCC_Monografia.pdf`.
+
+## Tech Stack
+
+- Python (game engine + AI routines)
+- React frontend
+- WebSockets
+- Docker / Docker Compose
+
+## Repository Layout
+
+- `game_engine/`: game logic, websocket server, and AI-related modules
+- `frontend/`: web interface
+- `tests/`: API interaction script and test utilities
+- `TCC_Monografia.pdf`: project write-up
+
+## Quickstart (Docker)
+
+From repository root:
+
+```bash
 make start
 ```
-ou
-```
-docker compose up
+
+or:
+
+```bash
+docker compose up --build
 ```
 
-Agora abra em algum browser de preferencia a seguinte URL:
-```
-http://localhost:3000/
-```
+Open:
 
-### Só jogar agora :)
+- Frontend: `http://localhost:3000`
+- Backend websocket: `ws://localhost:3002`
 
-<br />
-<br />
+Stop:
 
-## Para parar de rodar a app WEB:
-```
+```bash
 make stop
 ```
-ou
-```
+
+or:
+
+```bash
 docker compose down
 ```
+
+## Running Services Manually
+
+Backend:
+
+```bash
+cd game_engine
+pip install -r requirements.txt
+python main.py
+```
+
+Frontend:
+
+```bash
+cd frontend
+npm install
+npm start
+```
+
+## What This Project Demonstrates
+
+- multi-street poker simulation support (including Leduc and Texas Hold'em modes),
+- agent-vs-human game loop over websocket events,
+- AI training/blueprint experimentation for decision-making.
+
+## Limitations / Next Improvements
+
+- Move large training artifacts to GitHub Releases or Git LFS.
+- Add reproducible training entrypoints and experiment tracking metadata.
+- Add automated tests for websocket game flow.
