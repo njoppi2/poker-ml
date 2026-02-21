@@ -71,6 +71,20 @@ npm install
 npm start
 ```
 
+## Testing
+
+Utility/unit tests:
+
+```bash
+PYTHONPATH=. python -m unittest discover -s tests -p "test_*.py"
+```
+
+API interaction script:
+
+```bash
+python tests/sample_api.py --help
+```
+
 ## What This Project Demonstrates
 
 - multi-street poker simulation support (including Leduc and Texas Hold'em modes),
