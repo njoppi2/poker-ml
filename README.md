@@ -6,12 +6,6 @@
 
 Poker AI project from our undergraduate final project (TCC), combining strategy experimentation, a Python websocket game engine, and a React frontend for interactive play.
 
-## Snapshot
-
-<p align="center">
-  <img src="docs/images/ui-snapshot.png" alt="Poker ML frontend start screen with game mode selection" width="430" />
-</p>
-
 ## Problem
 
 Provide a compact research and experimentation environment to simulate poker rounds, evaluate agent behavior, and expose game state through a real-time UI.

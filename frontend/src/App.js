@@ -26,7 +26,9 @@ function App() {
           sessionKey: `${gameType}:${chipMode}:${sessionAttempt}`,
         };
 
-  const { connectionState, errorMessage, gameData, sendMessage } = usePokerSession(sessionRequest);
+  const { connectionState, errorMessage, gameData, sendMessage, sessionMode } = usePokerSession(
+    sessionRequest,
+  );
 
   const startGame = () => {
     setIsChipSpinning(true);
@@ -40,8 +42,12 @@ function App() {
   const statusMessage =
     connectionState === "connecting"
       ? "Connecting to backend..."
+      : connectionState === "mock"
+        ? "Backend not reachable. Falling back to playable mock mode."
       : connectionState === "streaming"
-        ? "Game state received."
+        ? sessionMode === "mock"
+          ? "Mock mode active."
+          : "Game state received."
         : connectionState === "closed"
           ? "Connection closed."
           : errorMessage;
