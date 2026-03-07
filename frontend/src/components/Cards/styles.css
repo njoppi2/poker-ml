@@ -12,7 +12,8 @@
     border-radius: 10px;
     border: 1px solid rgba(99, 99, 99, 0.628);
 
-    &:last-child {
-        margin: 0px;
-    }
+}
+
+.card:last-child {
+    margin: 0;
 }

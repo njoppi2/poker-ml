@@ -1,16 +1,9 @@
-
-# dependencies
 frontend/node_modules
 frontend/.pnp
 frontend.pnp.js
-
-# testing
-frontend/coverage
-
-# production
 frontend/build
-
-# misc
+frontend/dist
+frontend/coverage
 frontend/.DS_Store
 frontend/.env.local
 frontend/.env.development.local
@@ -21,16 +14,12 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-frontend2
-
-game_engine/analysis/logs/*
-!game_engine/analysis/logs/matches/
-
-game_engine/analysis/blueprints/*
-!game_engine/analysis/blueprints/important_blueprints/
-
+game_engine/ia/analysis/logs/*
+!game_engine/ia/analysis/logs/.gitkeep
+game_engine/ia/analysis/blueprints/important_blueprints/*
+!game_engine/ia/analysis/blueprints/important_blueprints/.gitkeep
+game_engine/models/runtime/*.json
 
 **/__pycache__
-
-# other
+**/.pytest_cache
 **/launch.json

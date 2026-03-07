@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "poker-ml"
+version = "0.1.0"
+description = "Poker ML backend and frontend monorepo."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "requests==2.32.3",
+  "treys==0.1.8",
+  "websockets==11.0.3",
+]
+
+[tool.setuptools]
+packages = ["game_engine", "game_engine.ai"]

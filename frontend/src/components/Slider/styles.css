@@ -1,3 +1,20 @@
+.slider-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+}
+
+.slider-range {
+    flex: 1;
+    accent-color: #087c1e;
+}
+
 .slider-input {
-    font-size: 12px !important;
+    width: 72px;
+    font-size: 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(29, 26, 26, 0.35);
+    padding: 6px 8px;
+    background-color: rgba(255, 255, 255, 0.95);
 }

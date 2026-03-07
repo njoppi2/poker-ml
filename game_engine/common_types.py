@@ -1,21 +1,24 @@
 from enum import Enum
-from typing import List, Literal, Tuple
-import json
+from typing import Literal
 
 PlayerGroups = Literal["all", "non_broke", "can_bet_in_current_turn", "active_in_hand", "all_in", "human", "not_human"]
 
-class PokerPhases(Enum):
+class PokerPhases(str, Enum):
     PRE_FLOP = "PRE_FLOP"
     FLOP = "FLOP"
     TURN = "TURN"
     RIVER = "RIVER"
 
-class LeducPhases(Enum):
+class LeducPhases(str, Enum):
     PRE_FLOP = "PRE_FLOP"
     FLOP = "FLOP"
 
-class Encoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, Enum):
-            return obj.value
-        return super().default(obj)
+class ChipMode(str, Enum):
+    PERSISTENT_MATCH = "persistent_match"
+    RESET_EACH_ROUND = "reset_each_round"
+
+
+def serialize_enum(value):
+    if isinstance(value, Enum):
+        return value.value
+    return value

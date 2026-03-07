@@ -1,13 +1,17 @@
-import React from 'react';
-import './styles.css';
+import "./styles.css";
 
-const OptionButton = ({ currentOption, setCurrentOption, myOption }) => {
+const OptionButton = ({ children, currentOption, myOption, setCurrentOption }) => {
+  const isSelected = currentOption === myOption;
 
-    return (
-        <div className='graph-option' style={currentOption == myOption ? { border: '3px solid #1d1a1a', opacity: '1', pointerEvents: 'none' } : {}} onClick={() => setCurrentOption(myOption)}>
-            {myOption}
-        </div>
-    );
+  return (
+    <button
+      className={`graph-option ${isSelected ? "selected" : ""}`}
+      onClick={() => setCurrentOption(myOption)}
+      type="button"
+    >
+      {children || myOption}
+    </button>
+  );
 };
 
 export default OptionButton;

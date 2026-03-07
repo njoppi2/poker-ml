@@ -1,0 +1,13 @@
+.git
+artifacts
+docs
+scripts
+tests
+TCC_Monografia.pdf
+frontend/node_modules
+frontend/dist
+frontend/build
+game_engine/ia/analysis
+game_engine/models/runtime/*.json
+**/__pycache__
+**/.pytest_cache

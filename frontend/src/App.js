@@ -1,80 +1,104 @@
-import React, { useEffect, useState } from 'react';
-import Game from './components/Game';
-import './App.css';
-import OptionButton from './components/OptionButton';
+import { useState } from "react";
+
+import Game from "./components/Game";
+import OptionButton from "./components/OptionButton";
+import { usePokerSession } from "./hooks/usePokerSession";
+import "./App.css";
+
+const GAME_OPTIONS = ["Texas Hold'em", "Leduc"];
+const CHIP_MODE_OPTIONS = [
+  { label: "Persistent Match", value: "persistent_match" },
+  { label: "Reset Each Round", value: "reset_each_round" },
+];
 
 function App() {
-    const [gameData, setGameData] = useState({});
-    const [socket, setSocket] = useState(null); // WebSocket connection state
-    const [initialPage, setInitialPage] = useState(true);
-    const [gameType, setGameType] = useState("Leduc");
-    const [isChipSpinning, setIsChipSpinning] = useState(false);
+  const [gameType, setGameType] = useState("Leduc");
+  const [chipMode, setChipMode] = useState("persistent_match");
+  const [sessionAttempt, setSessionAttempt] = useState(0);
+  const [isChipSpinning, setIsChipSpinning] = useState(false);
 
-    const sendMessage = (message) => {
-        if (socket && socket.readyState === WebSocket.OPEN) {
-            socket.send(message);
-        }
-    };
-
-    const handleInitialPageClick = () => {
-        setIsChipSpinning(true);
-        setTimeout(() => {
-            setInitialPage(false);
-        }, 1500);
-    }
-
-    useEffect(() => {
-        if (initialPage) return;
-        const newSocket = new WebSocket('ws://localhost:3002'); // Replace with your WebSocket server URL
-
-        newSocket.onopen = () => {
-            console.log('WebSocket connected');
-            // Send a message to start the game on the server
-            newSocket.send(`start-game-${gameType}`);
+  const sessionRequest =
+    sessionAttempt === 0
+      ? null
+      : {
+          chipMode,
+          gameType,
+          sessionKey: `${gameType}:${chipMode}:${sessionAttempt}`,
         };
 
-        newSocket.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            console.log('Received game update:', data);
-            // Update your game UI or state with the received data
-            setGameData(data);
-        };
+  const { connectionState, errorMessage, gameData, sendMessage } = usePokerSession(sessionRequest);
 
-        newSocket.onclose = () => {
-            console.log('WebSocket disconnected');
-        };
+  const startGame = () => {
+    setIsChipSpinning(true);
+    window.setTimeout(() => {
+      setSessionAttempt((currentAttempt) => currentAttempt + 1);
+    }, 900);
+  };
 
-        // Store the WebSocket connection in state
-        setSocket(newSocket);
+  const chipModeLabel = CHIP_MODE_OPTIONS.find((option) => option.value === chipMode)?.label;
+  const showLobby = gameData === null;
+  const statusMessage =
+    connectionState === "connecting"
+      ? "Connecting to backend..."
+      : connectionState === "streaming"
+        ? "Game state received."
+        : connectionState === "closed"
+          ? "Connection closed."
+          : errorMessage;
 
-        return () => {
-            // Clean up the WebSocket connection when the component unmounts
-            if (newSocket.readyState === 1) {
-                newSocket.close();
-            }
-        };
-    }, [initialPage]);
-
-    return (
-        <div className="App">
-            {initialPage || (!gameData || Object.keys(gameData).length === 0) ? (<>
-                <div className="initial-page">
-                    <div className='options-wrapper'>
-                        <OptionButton currentOption={gameType} setCurrentOption={(type) => setGameType(type)} myOption={"Texas Hold'em"} />
-                        <OptionButton currentOption={gameType} setCurrentOption={(type) => setGameType(type)} myOption={"Leduc"} />
-                    </div>
-                    <div className='start-button' onClick={handleInitialPageClick}>
-                        Start Game
-                    </div>
-                </div>
-                <div className='App-logo' style={!isChipSpinning ? { animation: 'none' } : {}} />
-            </>
-            ) : (
-                <Game gameData={gameData} sendMessage={sendMessage} />
-            )
-            }
+  return (
+    <div className="App">
+      {showLobby ? (
+        <div className="initial-page">
+          <div className="panel-header">
+            <div className="eyebrow">Poker ML</div>
+            <h1>Choose your match</h1>
+            <p>Local play works automatically. Set `VITE_WS_URL` only if you need a custom websocket endpoint.</p>
+          </div>
+          <div className="option-group">
+            <div className="group-label">Game</div>
+            <div className="options-wrapper">
+              {GAME_OPTIONS.map((option) => (
+                <OptionButton
+                  key={option}
+                  currentOption={gameType}
+                  myOption={option}
+                  setCurrentOption={setGameType}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="option-group">
+            <div className="group-label">Chip mode</div>
+            <div className="options-wrapper">
+              {CHIP_MODE_OPTIONS.map((option) => (
+                <OptionButton
+                  key={option.value}
+                  currentOption={chipMode}
+                  myOption={option.value}
+                  setCurrentOption={setChipMode}
+                >
+                  {option.label}
+                </OptionButton>
+              ))}
+            </div>
+          </div>
+          <div className="session-summary">
+            {gameType} · {chipModeLabel}
+          </div>
+          <button className="start-button" onClick={startGame} type="button">
+            {sessionAttempt === 0 ? "Start Game" : "Restart Session"}
+          </button>
+          <div className={`status-message ${connectionState === "error" ? "error" : ""}`}>
+            {statusMessage || "Choose a mode and start a session."}
+          </div>
         </div>
-    );
+      ) : (
+        <Game gameData={gameData} onRestart={startGame} sendMessage={sendMessage} />
+      )}
+      <div className="App-logo" style={!isChipSpinning ? { animation: "none" } : {}} />
+    </div>
+  );
 }
 
 export default App;

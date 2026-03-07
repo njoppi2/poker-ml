@@ -1,16 +1,12 @@
 FROM python:3.10.12
 
-# Set the working directory to /app
 WORKDIR /app
 
-# Copy your project files into the container
-COPY . /app
+COPY game_engine/requirements.txt /app/game_engine/requirements.txt
+RUN pip install -r /app/game_engine/requirements.txt
 
-# Install dependencies
-RUN pip install -r requirements.txt
+COPY game_engine /app/game_engine
 
-# Expose the WebSocket port
 EXPOSE 3002
 
-# Define the command to run your WebSocket server
-CMD ["python", "-u", "main.py"]
+CMD ["python", "-m", "game_engine.main"]

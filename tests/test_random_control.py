@@ -1,15 +1,8 @@
 import os
-import sys
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
-ROOT = Path(__file__).resolve().parents[1]
-GAME_ENGINE_DIR = ROOT / "game_engine"
-if str(GAME_ENGINE_DIR) not in sys.path:
-    sys.path.insert(0, str(GAME_ENGINE_DIR))
-
-import random_control  # noqa: E402
+from game_engine import random_control
 
 
 class RandomControlTests(unittest.TestCase):

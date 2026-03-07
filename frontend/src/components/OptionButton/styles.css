@@ -1,10 +1,8 @@
-.chart-wrapper {}
-
 .graph-option {
-    width: 100px;
-    height: 9vh;
+    min-width: 120px;
+    min-height: 48px;
     background-color: #FFD078;
-    display: flex;
+    display: inline-flex;
     color: #1d1a1a;
     justify-content: center;
     align-items: center;
@@ -14,13 +12,22 @@
     text-align: center;
     opacity: 0.7;
     border: 3px solid transparent;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
 
-    &:hover {
-        cursor: pointer;
-        opacity: 0.4;
-    }
+.graph-option:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
 
-    &:last-child {
-        margin: 0px;
-    }
+.graph-option.selected {
+    border-color: #1d1a1a;
+    opacity: 1;
+    pointer-events: none;
+}
+
+.graph-option:last-child {
+    margin-right: 0;
 }

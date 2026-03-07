@@ -1,56 +1,50 @@
+from __future__ import annotations
+
+import argparse
 import asyncio
-import sys
-from pathlib import Path
-from typing import Optional
 
-import websockets
-
-
-def _load_game_class():
-    engine_dir = Path(__file__).resolve().parent
-    if str(engine_dir) not in sys.path:
-        sys.path.insert(0, str(engine_dir))
-
-    from game import Game  # Imported lazily for faster smoke tests.
-
-    return Game
+from .common_types import ChipMode
+from .config import build_game_config, load_server_config, resolve_chip_mode
+from .server import run_server, simulate_poker_game
 
 
-def parse_start_message(message: str) -> Optional[str]:
-    game_types = {
-        "start-game-Texas Hold'em": "Texas Hold'em",
-        "start-game-Leduc": "Leduc",
-    }
-    return game_types.get(message)
+def parse_start_message(message: str) -> str | None:
+    from .protocol import parse_start_request
+
+    request = parse_start_request(message)
+    return None if request is None else request.game_type
 
 
-async def simulate_poker_game(websocket, game_type: str, random_seed: Optional[int] = None):
-    Game = _load_game_class()
-    game = Game(
-        websocket=websocket,
-        game_type=game_type,
-        num_ai_players=1,
-        num_human_players=1,
-        initial_chips=1200,
-        increase_blind_every=0,
-        random_seed=random_seed,
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Run the Poker ML websocket server or a local AI simulation.")
+    parser.add_argument("--no-websocket", action="store_true", help="Run a local AI-only simulation.")
+    parser.add_argument("--game-type", default="Leduc", choices=["Leduc", "Texas Hold'em"])
+    parser.add_argument(
+        "--chip-mode",
+        default=ChipMode.PERSISTENT_MATCH.value,
+        choices=[chip_mode.value for chip_mode in ChipMode],
     )
-    await game.start_game()
+    parser.add_argument("--random-seed", type=int, default=None)
+    return parser
 
 
-async def handle_client(websocket, path):
-    async for message in websocket:
-        selected_game_type = parse_start_message(message)
-        if selected_game_type:
-            await simulate_poker_game(websocket, selected_game_type)
-        break
+def main() -> None:
+    args = build_parser().parse_args()
+    chip_mode = resolve_chip_mode(args.chip_mode)
+
+    if args.no_websocket:
+        game_config = build_game_config(
+            num_ai_players=2,
+            num_human_players=0,
+            chip_mode=chip_mode,
+            random_seed=args.random_seed,
+        )
+        asyncio.run(simulate_poker_game(None, args.game_type, game_config))
+        return
+
+    server_config = load_server_config()
+    asyncio.run(run_server(server_config))
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "--no-websocket":
-        asyncio.run(simulate_poker_game(None, "Leduc"))
-    else:
-        loop = asyncio.get_event_loop()
-        start_server = websockets.serve(handle_client, "0.0.0.0", 3002)
-        loop.run_until_complete(start_server)
-        loop.run_forever()
+    main()

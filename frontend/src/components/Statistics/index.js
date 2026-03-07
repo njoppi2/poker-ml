@@ -1,65 +1,68 @@
-import React, { useState } from 'react';
-import './styles.css';
-import Cards from '../Cards';
-import Graph from '../Graph';
-import OptionButton from '../OptionButton';
+import { useState } from "react";
+
+import Graph from "../Graph";
+import OptionButton from "../OptionButton";
+import "./styles.css";
 
 function cumulativeSum(numbers) {
-    if (!Array.isArray(numbers)) {
-        throw new Error('Input must be an array of numbers');
-    }
-
-    return numbers.map((_, index) => numbers.slice(0, index + 1).reduce((sum, num) => sum + num, 0));
+  let runningTotal = 0;
+  return numbers.map((value) => {
+    runningTotal += value;
+    return runningTotal;
+  });
 }
 
 function getData(data, graphOption) {
-    if (graphOption === "Chips won per game") {
-        return data
-    } else {
-        return cumulativeSum(data)
-    }
+  if (graphOption === "Chips won per game") {
+    return data;
+  }
+  return cumulativeSum(data);
 }
 
-const Statistics = ({ gameData, closePanel }) => {
-    const initial_players = gameData.players?.initial_players || [];
-    const [graphOption, setGraphOption] = useState("Chips won per game");
+const Statistics = ({ closePanel, gameData }) => {
+  const initialPlayers = gameData.players?.initial_players || [];
+  const [graphOption, setGraphOption] = useState("Chips won per game");
+  const humanPlayer = initialPlayers.find((player) => player.is_robot === false);
+  const chartData = getData(humanPlayer?.chips_won_history || [], graphOption);
 
-    const humanPlayer = initial_players.find(p => p.is_robot === false);
-    return (
-        <div className='statistics-panel-wrapper'>
-            <div className='close-button' onClick={closePanel} />
-            <div className='statistics-numbers-wrapper'>
-                <div className='statistics-numbers'>
-                    <div className='number-row bold'>Round:</div>
-                    <div className='number-row'>{gameData.round_num}</div>
-                </div>
-                <div className='statistics-numbers'>
-                    <div className='number-row bold'>Total chip balance:</div>
-                    {
-                        initial_players.map((player, index) => (
-                            <div
-                                className='number-row'
-                                key={index}
-                            >
-                                <div className='number-column'>{player.name.replace(/\d/g, '')}</div>
-                                <div className='number-column'>{player.chip_balance}</div>
-                            </div>
-                        ))
-                    }
-                </div>
+  return (
+    <div className="statistics-panel-wrapper">
+      <button className="close-button" onClick={closePanel} type="button" />
+      <div className="statistics-numbers-wrapper">
+        <div className="statistics-numbers">
+          <div className="number-row bold">Round:</div>
+          <div className="number-row">{gameData.round_num}</div>
+        </div>
+        <div className="statistics-numbers">
+          <div className="number-row bold">Total chip balance:</div>
+          {initialPlayers.map((player) => (
+            <div className="number-row" key={player.id}>
+              <div className="number-column">{player.name.replace(/\d/g, "")}</div>
+              <div className="number-column">{player.chip_balance}</div>
             </div>
-            <div className='statistics-graphs-wrapper'>
-                <div className='statistics-graphs-header'>
-                    <div className='graphs-header-text'>Player statistics</div>
-                    <OptionButton currentOption={graphOption} setCurrentOption={(type) => setGraphOption(type)} myOption={"Chips won per game"} />
-                    <OptionButton currentOption={graphOption} setCurrentOption={(type) => setGraphOption(type)} myOption={"Total chip balance"} />
-                </div>
-                <div className='graph_wrapper'>
-                    <Graph data={getData(humanPlayer.chips_won_history, graphOption)} />
-                </div>
-            </div>
-        </div >
-    );
-}
+          ))}
+        </div>
+      </div>
+      <div className="statistics-graphs-wrapper">
+        <div className="statistics-graphs-header">
+          <div className="graphs-header-text">Player statistics</div>
+          <OptionButton
+            currentOption={graphOption}
+            myOption="Chips won per game"
+            setCurrentOption={setGraphOption}
+          />
+          <OptionButton
+            currentOption={graphOption}
+            myOption="Total chip balance"
+            setCurrentOption={setGraphOption}
+          />
+        </div>
+        <div className="graph_wrapper">
+          <Graph data={chartData} />
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default Statistics;

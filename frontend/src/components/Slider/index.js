@@ -1,61 +1,49 @@
-import * as React from 'react';
-import { styled } from '@mui/material/styles';
-import Box from '@mui/material/Box';
-import Grid from '@mui/material/Grid';
-import Slider from '@mui/material/Slider';
-import MuiInput from '@mui/material/Input';
-import './styles.css';
-
-const Input = styled(MuiInput)`
-  width: 42px;
-`;
+import "./styles.css";
 
 export default function InputSlider({ min, max, value, onValueChange }) {
-    const handleSliderChange = (event, newValue) => {
-        onValueChange(newValue);
-    };
+  const clampedMin = Math.min(min, max);
 
-    const handleInputChange = (event) => {
-        onValueChange(event.target.value === '' ? min : Number(event.target.value));
-    };
+  const handleSliderChange = (event) => {
+    onValueChange(Number(event.target.value));
+  };
 
-    const handleBlur = () => {
-        if (value < min) {
-            onValueChange(min);
-        } else if (value > max) {
-            onValueChange(max);
-        }
-    };
+  const handleInputChange = (event) => {
+    if (event.target.value === "") {
+      onValueChange(clampedMin);
+      return;
+    }
 
-    return (
-        <Box sx={{ width: 250 }}>
-            <Grid container spacing={2} alignItems="center">
-                <Grid item xs>
-                    <Slider
-                        value={value}
-                        min={min}
-                        max={max}
-                        onChange={handleSliderChange}
-                        aria-labelledby="input-slider"
-                    />
-                </Grid>
-                <Grid item>
-                    <Input
-                        value={value}
-                        size="small"
-                        onChange={handleInputChange}
-                        onBlur={handleBlur}
-                        className="slider-input"
-                        inputProps={{
-                            step: 1,
-                            min,
-                            max,
-                            type: 'number',
-                            'aria-labelledby': 'input-slider',
-                        }}
-                    />
-                </Grid>
-            </Grid>
-        </Box>
-    );
+    onValueChange(Number(event.target.value));
+  };
+
+  const handleBlur = () => {
+    if (value < clampedMin) {
+      onValueChange(clampedMin);
+    } else if (value > max) {
+      onValueChange(max);
+    }
+  };
+
+  return (
+    <div className="slider-container">
+      <input
+        aria-label="Bet size"
+        className="slider-range"
+        max={max}
+        min={clampedMin}
+        onChange={handleSliderChange}
+        type="range"
+        value={value}
+      />
+      <input
+        className="slider-input"
+        max={max}
+        min={clampedMin}
+        onBlur={handleBlur}
+        onChange={handleInputChange}
+        type="number"
+        value={value}
+      />
+    </div>
+  );
 }

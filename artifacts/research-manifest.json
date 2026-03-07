@@ -1,0 +1,15 @@
+{
+  "releaseTag": "research-artifacts",
+  "assets": [
+    {
+      "archive": "analysis-logs.tar.gz",
+      "description": "Archived evaluation logs and match outputs.",
+      "target": "game_engine/ia/analysis/logs"
+    },
+    {
+      "archive": "analysis-blueprints-extra.tar.gz",
+      "description": "Research-only blueprint snapshots and comparison models.",
+      "target": "game_engine/ia/analysis/blueprints/important_blueprints"
+    }
+  ]
+}

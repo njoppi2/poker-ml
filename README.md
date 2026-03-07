@@ -6,13 +6,10 @@
 
 Poker AI project from our undergraduate final project (TCC), combining strategy experimentation, a Python websocket game engine, and a React frontend for interactive play.
 
-Live frontend: <https://njoppi2.github.io/poker-ml/>
-
 ## Snapshot
 
 <p align="center">
   <img src="docs/images/ui-snapshot.png" alt="Poker ML frontend start screen with game mode selection" width="300" />
-  <img src="frontend/public/assets/table.svg" alt="Poker table board asset used in gameplay UI" width="560" />
 </p>
 
 ## Problem
@@ -28,9 +25,11 @@ Provide a compact research and experimentation environment to simulate poker rou
 
 ## Repository Layout
 
-- `game_engine/`: game logic, websocket server, and AI modules
+- `game_engine/`: packaged backend, websocket server, and runtime AI policy
 - `frontend/`: web interface
-- `tests/`: test utilities and API interaction script
+- `tests/`: backend unit tests
+- `artifacts/`: research artifact manifest
+- `scripts/`: helper scripts such as research artifact download
 - `TCC_Monografia.pdf`: monograph
 
 ## Quickstart
@@ -69,9 +68,8 @@ docker compose down
 Backend:
 
 ```bash
-cd game_engine
-pip install -r requirements.txt
-python main.py
+python3 -m pip install -r game_engine/requirements.txt
+python3 -m game_engine.main
 ```
 
 Frontend:
@@ -82,20 +80,28 @@ npm install
 npm run dev
 ```
 
+Local development falls back to `ws://localhost:3002`.
+`VITE_WS_URL` remains available as an optional manual override if you want the frontend to target a non-default websocket endpoint.
+
 ## Validation and CI
 
 Local checks:
 
 ```bash
-PYTHONPATH=. python -m unittest discover -s tests -p "test_*.py"
-cd frontend && npm ci && npm run build
+python3 -m pip install -r game_engine/requirements.txt
+PYTHONPATH=. python3 -m unittest discover -s tests -p "test_*.py"
+cd frontend && npm ci && npm run lint && npm run test && npm run build
 ```
 
 CI (`.github/workflows/ci.yml`) validates:
 
 - Python syntax compilation in `game_engine`
 - Backend unit tests in `tests/`
+- Backend websocket integration coverage
+- Frontend lint
+- Frontend unit tests
 - Frontend production build
+- Docker image builds through `docker compose build`
 
 ## Deterministic Mode (Backend)
 
@@ -103,32 +109,45 @@ For reproducible backend behavior during tests/debugging, set:
 
 ```bash
 export POKER_ML_RANDOM_SEED=42
+export POKER_ML_CHIP_MODE=persistent_match
+export POKER_ML_MODEL_PATH="$(pwd)/game_engine/models/runtime/IOu-mccfr-6cards-11maxbet-EPcfr0_0-mRW0_0-iter100000000.pkl"
 ```
 
-This seed is now used for core game random operations such as deck shuffling and tie-break chip assignment.
+Other useful backend env vars:
+
+- `POKER_ML_WS_HOST`
+- `POKER_ML_WS_PORT`
+- `POKER_ML_MAX_ROUNDS`
 
 ## WebSocket Smoke Coverage
 
-- `tests/test_websocket_smoke.py` validates that websocket start messages trigger the correct game mode.
+- `tests/test_websocket_smoke.py` validates legacy and JSON websocket start messages.
+- `tests/test_websocket_integration.py` exercises a real websocket session through the server.
 - `tests/test_random_control.py` validates deterministic seed handling.
+- `tests/test_game_modes.py` validates persistent vs reset-each-round chip behavior.
 
 ## Results
 
-- Supports Leduc and Texas Hold'em modes.
+- Supports Leduc and Texas Hold'em modes with explicit chip modes.
 - Runs full agent-vs-human round flow over websocket events.
-- Includes baseline test suite and frontend build gate.
+- Includes backend unit coverage plus frontend lint/test/build gates.
+- Operates as a local-first stack through Docker Compose or direct local processes.
 
-## Limitations
+## Research Artifacts
 
-- Large training artifacts are still in-repo.
-- Training runs are not fully reproducible from one CLI entrypoint.
-- Websocket end-to-end test coverage is still limited.
+The runtime model now lives under `game_engine/models/runtime/`. Research-only logs and extra blueprint snapshots were removed from the active source tree and should be published as GitHub Release assets described in `artifacts/research-manifest.json`.
 
-## Roadmap
+Publish the release assets from a source ref that still contains the archived files:
 
-- Move large artifacts to GitHub Releases/LFS.
-- Add deterministic websocket integration tests.
-- Add experiment tracking metadata for training runs.
+```bash
+./scripts/publish_research_artifacts.sh research-artifacts HEAD
+```
+
+Fetch them after publishing a release:
+
+```bash
+./scripts/fetch_research_artifacts.sh
+```
 
 ## Contributing
 

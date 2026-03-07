@@ -1,11 +1,15 @@
-version: '3.8'
 services:
   react-frontend:
     build:
-      context: './frontend'
+      context: .
+      dockerfile: frontend/Dockerfile
+    environment:
+      VITE_WS_URL: ws://localhost:3002
     ports:
-      - '3000:3000'
+      - "3000:3000"
   poker-backend:
-    build: './game_engine'
+    build:
+      context: .
+      dockerfile: game_engine/Dockerfile
     ports:
-      - '3002:3002'
+      - "3002:3002"

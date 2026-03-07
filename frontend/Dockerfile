@@ -1,11 +1,11 @@
-FROM node:20
+FROM node:20.19.0
 
 WORKDIR /app
 
-COPY package*.json ./
+COPY frontend/package*.json ./
 RUN npm ci
 
-COPY . .
+COPY frontend ./
 
 EXPOSE 3000
 
