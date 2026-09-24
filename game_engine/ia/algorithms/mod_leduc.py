@@ -3,8 +3,12 @@ import collections
 import logging
 from enum import Enum
 import os
-from functions import color_print, create_file, float_to_custom_string, get_possible_actions, set_bet_value, generate_random_string
-from classes import HistoryNode, InfoSetNode, Card
+if __package__:
+    from .functions import color_print, create_file, float_to_custom_string, get_possible_actions, set_bet_value, generate_random_string
+    from .classes import HistoryNode, InfoSetNode, Card
+else:
+    from functions import color_print, create_file, float_to_custom_string, get_possible_actions, set_bet_value, generate_random_string
+    from classes import HistoryNode, InfoSetNode, Card
 import time
 import pickle
 import multiprocessing
@@ -34,7 +38,7 @@ class ModLeducTrainer:
     """
     # How can we handle situations where not all actions are alowed?
 
-    def __init__(self, iterations, algorithm, cards, exploring_phase, exploration_type, total_action_symbol, min_reality_weight, decrese_weight_of_initial_strategies, total_chips, sb, bb, is_bet_relative, fixed_strategyA=None, fixed_strategyB=None):
+    def __init__(self, iterations, algorithm, cards, exploring_phase, exploration_type, total_action_symbol, min_reality_weight, decrese_weight_of_initial_strategies, total_chips, sb, bb, is_bet_relative, fixed_strategyA=None, fixed_strategyB=None, *, autorun=True):
         self.max_bet = total_chips - 1
         self.total_chips = total_chips
         self.sb, self.bb = sb, bb
@@ -69,8 +73,9 @@ class ModLeducTrainer:
         self.decrese_weight_of_initial_strategies = decrese_weight_of_initial_strategies
 
         self.create_nodes_from_pickle(fixed_strategyA, fixed_strategyB)
-        self.log(f'../analysis/logs/{self.model_name}.log')
-        self.train()
+        if autorun:
+            self.log(f'../analysis/logs/{self.model_name}.log')
+            self.train()
         
 
     def create_nodes_from_pickle(self, fileA, fileB):
@@ -233,7 +238,11 @@ class ModLeducTrainer:
         if not is_current_model_fixed:
             # assert node_history_mapA == node_history_mapB
             # return node_history_mapA.next_histories.setdefault(my_cards, InfoSetNode(my_cards, possible_actions, None))
-            return self.node_history_map.setdefault(info_set, InfoSetNode(info_set, possible_actions, None))
+            node = self.node_history_map.get(info_set)
+            if node is None:
+                node = InfoSetNode(info_set, possible_actions, None)
+                self.node_history_map[info_set] = node
+            return node
         else:
             num_of_possible_actions = len(possible_actions)
             filler_strategy = [1/num_of_possible_actions for _ in range(num_of_possible_actions)]
@@ -308,12 +317,8 @@ class ModLeducTrainer:
         node_actions_utilities = [0.0] * len(possible_actions)
 
         if (self.algorithm == 'mccfr' and not explore_with_cfr) or is_current_model_fixed:
-            other_actions = list(possible_actions)  # Get a list of actions in the order of the enum
             chosen_action = node.get_action(strategy)
-            other_actions.remove(chosen_action)  # Remove the first action from the list
             chosen_action_index = node.actions.index(chosen_action)
-
-            updated_players, bet_result = set_bet_value(player, players, chosen_action["value"], next_phase_started, self.is_bet_relative, possible_actions)
 
             make_alt_plays = not is_current_model_fixed and alternative_play != opponent
             actions_to_iterate = possible_actions if make_alt_plays else [chosen_action]

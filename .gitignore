@@ -23,3 +23,8 @@ game_engine/models/runtime/*.json
 **/__pycache__
 **/.pytest_cache
 **/launch.json
+
+# Local training experiments and full optimizer checkpoints
+artifacts/training-runs/
+build/
+*.egg-info/

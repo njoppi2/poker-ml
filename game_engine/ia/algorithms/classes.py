@@ -1,5 +1,8 @@
 import random
-from functions import color_print
+if __package__:
+    from .functions import color_print
+else:
+    from functions import color_print
 from enum import Enum
 
 class Card(Enum):

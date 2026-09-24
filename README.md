@@ -129,6 +129,23 @@ Other useful backend env vars:
 
 ## Research Artifacts
 
+### Reproducible training and convergence
+
+The original modified Leduc game now has a standard external-sampling MCCFR
+trainer, a historical-trainer baseline, exact exploitability evaluation, and
+resumable checkpoints:
+
+```bash
+python3 -m game_engine.training.benchmark \
+  --chips 12 --algorithms external legacy --seeds 42 43 44 \
+  --iterations 100000 --eval-every 5000 --max-seconds 30 \
+  --output artifacts/training-runs/comparison
+```
+
+This does not replace the app's saved policy. See [training documentation](docs/training.md)
+for the algorithm audit, metric definitions, reference checks, early stopping,
+saved-model evaluation and checkpoint resumption.
+
 The runtime model now lives under `game_engine/models/runtime/`. Research-only logs and extra blueprint snapshots were removed from the active source tree and should be published as GitHub Release assets described in `artifacts/research-manifest.json`.
 
 Publish the release assets from a source ref that still contains the archived files:
