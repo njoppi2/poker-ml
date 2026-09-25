@@ -10,7 +10,7 @@ import sys
 import time
 from pathlib import Path
 
-from .evaluate import evaluate, validate_policy
+from .evaluate import evaluate, head_to_head, validate_policy
 from .game import LeducGame
 from .solver import ExternalSampling, LegacySampling, restore
 
@@ -66,7 +66,7 @@ def load_blueprint(game, path, missing="call"):
     return policy, missing_count
 
 
-def run(game, solver, seed, output, iterations, eval_every, target, max_seconds, previous_seconds=0.0):
+def run(game, solver, seed, output, iterations, eval_every, target, max_seconds, previous_seconds=0.0, opponent=None):
     output.mkdir()
     rows = []
     train_seconds = previous_seconds
@@ -78,6 +78,8 @@ def run(game, solver, seed, output, iterations, eval_every, target, max_seconds,
         eval_start = time.perf_counter()
         policy = solver.average_policy()
         metrics = evaluate(game, policy)
+        if opponent is not None:
+            metrics["head_to_head"] = head_to_head(game, policy, opponent)
         eval_seconds = time.perf_counter() - eval_start
         row = {"algorithm": solver.name, "seed": seed, "iteration": solver.iterations,
                "train_seconds": train_seconds, "evaluation_seconds": eval_seconds,
@@ -87,8 +89,10 @@ def run(game, solver, seed, output, iterations, eval_every, target, max_seconds,
         with (output / "metrics.jsonl").open("a") as handle:
             handle.write(json.dumps(row, allow_nan=False) + "\n")
         save_checkpoint(output / "checkpoint.pkl", solver, seed, train_seconds)
+        matchup = (f" vs_opponent={metrics['head_to_head']['candidate_bb_per_100']:+.4f} BB/100"
+                   if opponent is not None else "")
         print(f"{solver.name} seed={seed} iteration={solver.iterations} "
-              f"train={train_seconds:.3f}s exploitability={metrics['exploitability']:.6f} BB/hand", flush=True)
+              f"train={train_seconds:.3f}s exploitability={metrics['exploitability']:.6f} BB/hand{matchup}", flush=True)
         reached = target is not None and metrics["exploitability"] <= target
         if reached:
             stop_reason = "target"
@@ -101,10 +105,18 @@ def run(game, solver, seed, output, iterations, eval_every, target, max_seconds,
         next_eval = min(iterations, (solver.iterations // eval_every + 1) * eval_every)
         block_start = time.perf_counter()
         while solver.iterations < next_eval:
-            solver.iteration()
-            if (max_seconds is not None and solver.iterations % 100 == 0
-                    and train_seconds - run_start_seconds + time.perf_counter() - block_start >= max_seconds):
-                break
+            if hasattr(solver, "advance"):
+                count = next_eval - solver.iterations
+                if max_seconds is not None:
+                    count = min(count, 10_000)
+                solver.advance(count)
+            else:
+                solver.iteration()
+            if max_seconds is not None:
+                check_every = 10_000 if hasattr(solver, "advance") else 100
+                if (solver.iterations % check_every == 0
+                        and train_seconds - run_start_seconds + time.perf_counter() - block_start >= max_seconds):
+                    break
         train_seconds += time.perf_counter() - block_start
     blueprint = {info.key: (list(info.actions), probabilities) for info, probabilities in zip(game.infosets, policy)}
     (output / "policy.pkl").write_bytes(pickle.dumps(blueprint, protocol=pickle.HIGHEST_PROTOCOL))
@@ -112,6 +124,8 @@ def run(game, solver, seed, output, iterations, eval_every, target, max_seconds,
               "target": target, "target_reached": reached, "stop_reason": stop_reason,
               "final": rows[-1]}
     write_json(output / "summary.json", result)
+    if hasattr(solver, "close"):
+        solver.close()
     return result
 
 
@@ -119,6 +133,8 @@ def parser():
     p = argparse.ArgumentParser(description="Exact convergence benchmark for the original modified Leduc game.")
     p.add_argument("--chips", type=int, help="starting stack in ante/BB units, 2..12 (default 12)")
     p.add_argument("--algorithms", nargs="+", choices=SOLVERS, help="default external legacy")
+    p.add_argument("--backend", choices=["python", "rust"], default="python",
+                   help="training implementation for external sampling (default python)")
     p.add_argument("--seeds", nargs="+", type=int, help="default 42")
     p.add_argument("--iterations", type=int, default=20000, help="total iteration ceiling, including resumed iterations")
     p.add_argument("--eval-every", type=int, default=1000)
@@ -127,6 +143,7 @@ def parser():
     p.add_argument("--output", type=Path, required=True, help="new directory; existing results are never overwritten")
     p.add_argument("--resume", type=Path, help="trusted checkpoint.pkl; retains algorithm, seed and RNG state")
     p.add_argument("--evaluate-blueprint", type=Path, help="evaluate a trusted legacy-format policy pickle, without training")
+    p.add_argument("--opponent", type=Path, help="trusted policy pickle for exact head-to-head evaluation at every checkpoint")
     p.add_argument("--missing", choices=["call", "uniform"], default="call", help="completion for absent blueprint states")
     return p
 
@@ -144,6 +161,10 @@ def main(argv=None):
         p.error("resume cannot be combined with algorithms, seeds, or evaluate-blueprint")
     if args.evaluate_blueprint and (args.algorithms or args.seeds):
         p.error("evaluate-blueprint cannot be combined with algorithms or seeds")
+    if args.backend == "rust" and args.evaluate_blueprint:
+        p.error("--backend rust applies to training; omit it when only evaluating a blueprint")
+    if args.backend == "rust" and args.algorithms and any(name != "external" for name in args.algorithms):
+        p.error("the Rust backend currently supports only the external algorithm")
     if args.output.exists():
         p.error("output already exists; choose a new directory")
     checkpoint = load_checkpoint(args.resume) if args.resume else None
@@ -155,12 +176,22 @@ def main(argv=None):
     setup_start = time.perf_counter()
     game = LeducGame(chips)
     setup_seconds = time.perf_counter() - setup_start
+    rust_build_seconds = 0.0
+    if args.backend == "rust":
+        from .rust_backend import build_kernel
+        build_start = time.perf_counter()
+        build_kernel()
+        rust_build_seconds = time.perf_counter() - build_start
     args.output.mkdir(parents=True)
     source_root = Path(__file__).resolve().parents[1]
     source_files = sorted((source_root / "training").glob("*.py")) + [
         source_root / "ia" / "algorithms" / name
         for name in ("mod_leduc.py", "classes.py", "functions.py")
     ]
+    if args.backend == "rust":
+        source_files.extend([Path(__file__).with_name("rust_backend.py"),
+                             Path(__file__).with_name("rust_kernel") / "Cargo.toml",
+                             Path(__file__).with_name("rust_kernel") / "src" / "main.rs"])
     source_hashes = {str(path.relative_to(source_root)): hashlib.sha256(path.read_bytes()).hexdigest()
                      for path in source_files}
     try:
@@ -170,32 +201,57 @@ def main(argv=None):
         revision, dirty = None, None
     metadata = {"schema": SCHEMA, "python": sys.version, "platform": platform.platform(),
                 "git_revision": revision, "git_dirty": dirty, "chips": chips, "unit": "BB/hand (1 BB = 1 ante unit)",
+                "backend": args.backend, "rust_build_seconds": rust_build_seconds,
                 "public_nodes": len(game.nodes), "infosets": len(game.infosets), "rank_deals": len(game.deals),
                 "setup_seconds": setup_seconds, "arguments": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
                 "source_sha256": source_hashes,
                 "iteration_definitions": {"external": "two traversals, one per updating player; independent chance deals",
                                           "legacy": "one historical mixed traversal and one shuffled deal"},
-                "timing": "training excludes compilation, exact evaluation, policy export and checkpoint IO"}
+                "timing": ("Rust training includes state transfer and native process launch; compilation, exact evaluation, policy export and checkpoint IO are excluded"
+                           if args.backend == "rust" else
+                           "training excludes compilation, exact evaluation, policy export and checkpoint IO")}
     write_json(args.output / "metadata.json", metadata)
+    opponent = None
+    if args.opponent:
+        opponent, missing = load_blueprint(game, args.opponent, args.missing)
+        metadata["opponent"] = {"path": str(args.opponent.resolve()),
+                                "sha256": hashlib.sha256(args.opponent.read_bytes()).hexdigest(),
+                                "missing_infosets": missing, "missing_completion": args.missing}
+        write_json(args.output / "metadata.json", metadata)
     if args.evaluate_blueprint:
         rows, missing = load_blueprint(game, args.evaluate_blueprint, args.missing)
         start = time.perf_counter()
         result = {"blueprint": str(args.evaluate_blueprint.resolve()), "missing_infosets": missing,
                   "missing_completion": args.missing, **evaluate(game, rows)}
+        if opponent is not None:
+            result["head_to_head"] = head_to_head(game, rows, opponent)
         result["evaluation_seconds"] = time.perf_counter() - start
         write_json(args.output / "summary.json", result)
         print(json.dumps(result, indent=2))
         return
     results = []
     if checkpoint:
-        runs = [(restore(game, checkpoint["state"]), checkpoint["seed"], checkpoint["train_seconds"])]
+        if args.backend == "rust":
+            if checkpoint["state"]["algorithm"] != "external":
+                p.error("the Rust backend can resume only external-sampling checkpoints")
+            from .rust_backend import RustExternalSampling
+            solver = RustExternalSampling(game, state=checkpoint["state"])
+        else:
+            solver = restore(game, checkpoint["state"])
+        runs = [(solver, checkpoint["seed"], checkpoint["train_seconds"])]
     else:
-        algorithms = list(dict.fromkeys(args.algorithms or ["external", "legacy"]))
+        default_algorithms = ["external"] if args.backend == "rust" else ["external", "legacy"]
+        algorithms = list(dict.fromkeys(args.algorithms or default_algorithms))
         seeds = list(dict.fromkeys(args.seeds or [42]))
-        runs = ((SOLVERS[name](game, seed), seed, 0.0) for name in algorithms for seed in seeds)
+        if args.backend == "rust":
+            from .rust_backend import RustExternalSampling
+            solver_types = {"external": RustExternalSampling}
+        else:
+            solver_types = SOLVERS
+        runs = ((solver_types[name](game, seed), seed, 0.0) for name in algorithms for seed in seeds)
     for solver, seed, previous_seconds in runs:
         results.append(run(game, solver, seed, args.output / f"{solver.name}-{seed}", args.iterations,
-                           args.eval_every, args.target, args.max_seconds, previous_seconds))
+                           args.eval_every, args.target, args.max_seconds, previous_seconds, opponent))
     write_json(args.output / "summary.json", results)
 
 

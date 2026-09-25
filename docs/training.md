@@ -2,7 +2,9 @@
 
 The benchmark answers "how much computation buys a given strategy quality?" for
 the original research game. It does not train Hold'em or replace the app's model.
-It uses only Python's standard library; OpenSpiel is an optional validation dependency.
+The default Python backend uses only the standard library; OpenSpiel is an optional
+validation dependency. An optional optimized Rust backend is available for the
+external-sampling solver and requires the Rust `cargo` toolchain.
 
 ## Run
 
@@ -24,6 +26,26 @@ rejected rather than overwritten. Use a new directory for each experiment.
 For a quick check, use `--chips 4 --iterations 2000 --eval-every 500`.
 For stopping on quality, add `--target 0.25`. This stops at the first evaluated
 checkpoint with exploitability at or below 0.25 BB/hand, not at a proof of equilibrium.
+
+Use the Rust implementation of the same external-sampling updates with
+`--backend rust`. It builds the local release kernel with Cargo, stores ordinary
+Python-readable checkpoints, and can resume checkpoints created by either backend.
+The Rust backend currently supports only `external`, not `legacy`:
+
+```bash
+python3 -m game_engine.training.benchmark \
+  --backend rust --algorithms external --chips 12 --seeds 42 \
+  --iterations 100000000 --eval-every 1000000 \
+  --output artifacts/training-runs/rust-100m
+```
+
+To continue an existing external-sampling checkpoint, add `--resume path/to/checkpoint.pkl`
+and set `--iterations` to the desired total iteration count. Each evaluation interval
+records exploitability and atomically saves a resumable checkpoint. Rust training
+timings include Python/Rust state transfer and process launch; the one-time Cargo
+build, evaluation, and checkpoint writes are reported separately or excluded.
+See [the recorded Rust experiment](rust-training-results.md) for parity checks,
+runtime comparisons, and the 100-million-iteration result.
 
 Outputs:
 
@@ -64,6 +86,21 @@ python3 -m game_engine.training.benchmark \
 the runtime's intended fallback. `--missing uniform` measures sensitivity to this
 choice. The report includes the missing-state count; it is not a measurement of
 the websocket engine's edge-case behavior.
+
+Measure exact head-to-head winnings at every checkpoint by adding `--opponent`
+with a trusted policy pickle. This also works with `--resume` and
+`--evaluate-blueprint`. Metrics report candidate winnings in each seat and the
+equal-seat average, including BB per 100 hands. Positive means the candidate wins.
+These evaluations do not affect training or its RNG state. Opponent file hash and
+missing-state completion are saved in metadata. For example:
+
+```bash
+python3 -m game_engine.training.benchmark \
+  --resume artifacts/training-runs/comparison/external-42/checkpoint.pkl \
+  --opponent game_engine/models/runtime/IOu-mccfr-6cards-11maxbet-EPcfr0_0-mRW0_0-iter100000000.pkl \
+  --iterations 1000000 --eval-every 50000 --target 0.05 --max-seconds 300 \
+  --output artifacts/training-runs/longer-with-opponent
+```
 
 ## What is measured
 

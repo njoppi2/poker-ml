@@ -4,14 +4,45 @@ import io
 import json
 import pickle
 import random
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
 
 from game_engine.training.benchmark import load_blueprint, load_checkpoint, main, save_checkpoint
-from game_engine.training.evaluate import evaluate
+from game_engine.training.evaluate import evaluate, head_to_head
 from game_engine.training.game import LeducGame, showdown
 from game_engine.training.solver import ExternalSampling, LegacySampling, restore
+
+
+@unittest.skipUnless(shutil.which("cargo"), "Rust toolchain is not installed")
+class RustBackendTests(unittest.TestCase):
+    def test_rust_updates_and_resumes_exactly_like_python(self):
+        from game_engine.training.rust_backend import RustExternalSampling
+
+        game = LeducGame(4)
+        python_solver = ExternalSampling(game, 2718)
+        rust_solver = RustExternalSampling(game, 2718)
+        try:
+            for _ in range(37):
+                python_solver.iteration()
+            rust_solver.advance(37)
+            self.assertEqual(python_solver.state_dict(), rust_solver.state_dict())
+
+            with tempfile.TemporaryDirectory() as folder:
+                checkpoint = Path(folder) / "checkpoint.pkl"
+                save_checkpoint(checkpoint, rust_solver, 2718, 0.25)
+                saved = load_checkpoint(checkpoint)
+                resumed = RustExternalSampling(game, state=saved["state"])
+                try:
+                    for _ in range(23):
+                        python_solver.iteration()
+                    resumed.advance(23)
+                    self.assertEqual(python_solver.state_dict(), resumed.state_dict())
+                finally:
+                    resumed.close()
+        finally:
+            rust_solver.close()
 
 
 class GameTests(unittest.TestCase):
@@ -55,6 +86,20 @@ class GameTests(unittest.TestCase):
 
 
 class EvaluationTests(unittest.TestCase):
+    def test_head_to_head_sign_and_seat_balance(self):
+        game = LeducGame(2)
+        passive = [[float(i == 0) for i in range(len(info.actions))] for info in game.infosets]
+        aggressive = [[float(i == len(info.actions) - 1) for i in range(len(info.actions))]
+                      for info in game.infosets]
+        result = head_to_head(game, passive, aggressive)
+        # Check/fold loses exactly its ante against bet/call in either seat.
+        self.assertAlmostEqual(result['candidate_seat0'], -1)
+        self.assertAlmostEqual(result['candidate_seat1'], -1)
+        self.assertAlmostEqual(result['candidate_bb_per_100'], -100)
+        reverse = head_to_head(game, aggressive, passive)
+        self.assertAlmostEqual(reverse['candidate_balanced'], -result['candidate_balanced'])
+        self.assertAlmostEqual(head_to_head(game, aggressive, aggressive)['candidate_balanced'], 0)
+
     def test_uniform_policy_reference_values(self):
         # Independently verified against OpenSpiel's best-response evaluator.
         game = LeducGame(2)
@@ -97,6 +142,23 @@ class EvaluationTests(unittest.TestCase):
 
 
 class SolverTests(unittest.TestCase):
+    def test_cli_records_opponent_at_each_checkpoint(self):
+        game = LeducGame(2)
+        with tempfile.TemporaryDirectory() as folder, contextlib.redirect_stdout(io.StringIO()):
+            output = Path(folder) / 'run'
+            opponent = Path(folder) / 'opponent.pkl'
+            opponent.write_bytes(pickle.dumps({info.key: (list(info.actions), row)
+                                               for info, row in zip(game.infosets, game.uniform_policy())}))
+            main(['--chips', '2', '--algorithms', 'external', '--iterations', '2',
+                  '--eval-every', '1', '--opponent', str(opponent), '--output', str(output)])
+            rows = [json.loads(line) for line in (output / 'external-42' / 'metrics.jsonl').read_text().splitlines()]
+            self.assertEqual(len(rows), 3)
+            self.assertTrue(all('head_to_head' in row for row in rows))
+            self.assertAlmostEqual(rows[0]['head_to_head']['candidate_balanced'], 0)
+            metadata = json.loads((output / 'metadata.json').read_text())
+            self.assertEqual(metadata['opponent']['missing_infosets'], 0)
+            self.assertEqual(metadata['opponent']['sha256'], hashlib.sha256(opponent.read_bytes()).hexdigest())
+
     def test_legacy_cleanup_preserves_original_update_fixtures(self):
         # Captured from the unmodified f0ca5bd trainer, 50 iterations, 4 chips.
         # Quantize only the fixture comparison: Python 3.12+ changed float sum.

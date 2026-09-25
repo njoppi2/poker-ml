@@ -72,6 +72,23 @@ def expected_value(game, policy):
     return sum(p * value for p, value in zip(game.chance, values[0]))
 
 
+def head_to_head(game, candidate, opponent):
+    """Exact candidate winnings with each seat used equally, in BB/hand."""
+    validate_policy(game, candidate)
+    validate_policy(game, opponent)
+    seat0 = expected_value(game, [
+        candidate[i] if info.player == 0 else opponent[i]
+        for i, info in enumerate(game.infosets)
+    ])
+    seat1 = -expected_value(game, [
+        opponent[i] if info.player == 0 else candidate[i]
+        for i, info in enumerate(game.infosets)
+    ])
+    return {"candidate_seat0": seat0, "candidate_seat1": seat1,
+            "candidate_balanced": (seat0 + seat1) / 2,
+            "candidate_bb_per_100": 50 * (seat0 + seat1)}
+
+
 def evaluate(game: LeducGame, policy):
     validate_policy(game, policy)
     br0 = _best_response(game, policy, 0)
