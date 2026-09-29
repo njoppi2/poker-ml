@@ -51,7 +51,7 @@ def generate_random_string(length):
     letters = string.ascii_letters
     return ''.join(random.choice(letters) for _ in range(length))
 
-def get_possible_actions(history, cards, player, opponent, players, phase, all_actions, bb, total_chips, is_bet_relative):
+def get_possible_actions(history, cards, player, opponent, players, phase, all_actions, bb, total_chips, is_bet_relative, final_phase='flop'):
     """Returns the reward if it's a terminal node, or the possible actions if it's not."""    
     my_previous_bets = players[player][ROUND_BET_VALUE]
     bet_difference_to_continue = players[opponent][ROUND_BET_VALUE] - my_previous_bets
@@ -109,7 +109,7 @@ def get_possible_actions(history, cards, player, opponent, players, phase, all_a
         return possible_actions, None, False
     
     if players[player][PLAYED_CURRENT_PHASE] and bet_difference_to_continue == 0:
-        if phase == 'preflop':
+        if phase != final_phase:
             # if player 0 would end pre-flop, then the second player would start the flop, which is not what we want
             if player == 1:
                 possible_actions = filter_actions(0, 0)

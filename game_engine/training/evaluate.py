@@ -2,8 +2,8 @@
 
 At each public history, aggregate counterfactual values across ALL hidden deals
 in an information set before maximizing. Maximizing per deal would cheat by
-seeing the opponent's private card. Enumerates all 120 physical deals through
-24 weighted rank triples; no Monte Carlo evaluation noise.
+seeing the opponent's private card. Enumerates every physical deal through
+weighted rank-level outcomes; no Monte Carlo evaluation noise.
 """
 import math
 

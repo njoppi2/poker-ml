@@ -146,7 +146,24 @@ This does not replace the app's saved policy. See [training documentation](docs/
 for the algorithm audit, metric definitions, reference checks, early stopping,
 saved-model evaluation and checkpoint resumption.
 
-The runtime model now lives under `game_engine/models/runtime/`. Research-only logs and extra blueprint snapshots were removed from the active source tree and should be published as GitHub Release assets described in `artifacts/research-manifest.json`.
+The [action-resolution curriculum experiment](docs/experiments/action-curriculum.md)
+compares staged bet-size expansion with direct DCFR training on a larger
+14-chip modified Leduc game. All reported exploitability is measured in the
+full-size game.
+
+The [card-space expansion experiment](docs/experiments/second-public-card.md)
+adds a turn street and five ranks to modified Leduc, then tests a separate
+suit-aware two-private-card mini Hold'em game with exact-evaluation and DCFR
+results, followed by a full-board sampled-CFR game that supports the complete
+52-card deck without enumerating chance outcomes. Its betting and stack sizes
+remain abstractions, so it is not a solved full no-limit Hold'em game.
+
+For a concise handoff covering what worked, what did not, and recommended next
+experiments, see the [research progress and lessons](docs/experiments/research-progress.md).
+
+The runtime model now lives under `game_engine/models/runtime/`. Raw research
+logs and extra blueprint snapshots are not checked in; large assets should be
+published as GitHub Release assets described in `artifacts/research-manifest.json`.
 
 Publish the release assets from a source ref that still contains the archived files:
 

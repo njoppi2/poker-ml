@@ -4,10 +4,6 @@ use std::time::Instant;
 
 const MAGIC_IN: &[u8; 8] = b"LDRUST01";
 const MAGIC_OUT: &[u8; 8] = b"LDRSOUT1";
-// Leduc has 24 weighted rank deals representing 120 physical deals and at
-// most `chips` legal actions (the public
-// trainer bounds chips to 14). Keep these scratch arrays on the stack.
-const MAX_CHOICE: usize = 24;
 
 struct Reader {
     data: Vec<u8>,
@@ -77,27 +73,10 @@ struct State {
     mt_index: usize,
     iterations: u64,
     node_visits: u64,
-}
-struct ChanceSampler {
-    cumulative: [f64; MAX_CHOICE],
-    len: usize,
-    total: f64,
-}
-impl ChanceSampler {
-    fn new(weights: &[f64]) -> Self {
-        assert!(weights.len() <= MAX_CHOICE, "too many chance outcomes");
-        let mut cumulative = [0.0; MAX_CHOICE];
-        let mut total = 0.0;
-        for (i, &weight) in weights.iter().enumerate() {
-            total += weight;
-            cumulative[i] = total;
-        }
-        Self {
-            cumulative,
-            len: weights.len(),
-            total,
-        }
-    }
+    weighted: bool,
+    variance_reduced: bool,
+    baseline_rate: f64,
+    baselines: Vec<f64>,
 }
 impl State {
     fn next_u32(&mut self) -> u32 {
@@ -131,12 +110,14 @@ impl State {
         ((a * 67_108_864 + b) as f64) / 9_007_199_254_740_992.0
     }
     fn choose(&mut self, weights: &[f64]) -> usize {
-        assert!(!weights.is_empty() && weights.len() <= MAX_CHOICE);
         let mut total = 0.0;
-        let mut cum = [0.0; MAX_CHOICE];
-        for (i, &w) in weights.iter().enumerate() {
+        let mut cum = [0.0; 24];
+        assert!(weights.len() <= cum.len());
+        let mut count = 0;
+        for &w in weights {
             total += w;
-            cum[i] = total;
+            cum[count] = total;
+            count += 1;
         }
         let needle = self.random() * total;
         let mut lo = 0usize;
@@ -151,26 +132,17 @@ impl State {
         }
         lo
     }
-    fn choose_chance(&mut self, chance: &ChanceSampler) -> usize {
-        let needle = self.random() * chance.total;
-        let mut lo = 0usize;
-        let mut hi = chance.len - 1;
-        while lo < hi {
-            let mid = (lo + hi) / 2;
-            if needle < chance.cumulative[mid] {
-                hi = mid;
-            } else {
-                lo = mid + 1;
-            }
-        }
-        lo
-    }
 }
 fn traverse(game: &Game, state: &mut State, index: usize, deal: usize, updating: usize) -> f64 {
     state.node_visits += 1;
     let player = game.players[index];
     if player < 0 {
-        return game.payoffs[index * game.deals + deal] * if updating == 0 { 1.0 } else { -1.0 };
+        let payoff = game.payoffs[index * game.deals + deal];
+        if state.variance_reduced {
+            let slot = index * game.deals + deal;
+            state.baselines[slot] += state.baseline_rate * (payoff - state.baselines[slot]);
+        }
+        return payoff * if updating == 0 { 1.0 } else { -1.0 };
     }
     let info = game.info_ids[index * game.deals + deal];
     state.visited[info] = 1;
@@ -180,50 +152,79 @@ fn traverse(game: &Game, state: &mut State, index: usize, deal: usize, updating:
     for i in start..end {
         sum += state.regrets[i].max(0.0);
     }
-    let n_actions = end - start;
-    assert!(
-        n_actions <= MAX_CHOICE,
-        "too many actions at information set"
-    );
-    let mut strategy = [0.0; MAX_CHOICE];
+    assert!(end - start <= 16);
+    let mut strategy_storage = [0.0; 16];
+    let strategy = &mut strategy_storage[..end - start];
     if sum > 0.0 {
-        for (j, i) in (start..end).enumerate() {
-            strategy[j] = state.regrets[i].max(0.0) / sum;
+        for i in start..end {
+            strategy[i - start] = state.regrets[i].max(0.0) / sum;
         }
     } else {
-        let p = 1.0 / (n_actions as f64);
-        for item in strategy.iter_mut().take(n_actions) {
-            *item = p;
+        let p = 1.0 / ((end - start) as f64);
+        for i in start..end {
+            strategy[i - start] = p;
         }
     }
+    let weight = if state.weighted {
+        (state.iterations + 1) as f64
+    } else {
+        1.0
+    };
+    let sign = if updating == 0 { 1.0 } else { -1.0 };
+    let value;
     if player as usize != updating {
-        let action = state.choose(&strategy[..n_actions]);
-        for (j, &p) in strategy[..n_actions].iter().enumerate() {
-            state.sums[start + j] += p;
+        let action = state.choose(strategy);
+        for (j, &p) in strategy.iter().enumerate() {
+            state.sums[start + j] += weight * p;
         }
         let child = game.children[game.child_offsets[index] + action];
-        return traverse(game, state, child, deal, updating);
+        if state.variance_reduced {
+            // Cache ALL baseline values before recursive traversal updates them.
+            let chosen_baseline = sign * state.baselines[child * game.deals + deal];
+            let mut expectation = 0.0;
+            for (a, &p) in strategy.iter().enumerate() {
+                let c = game.children[game.child_offsets[index] + a];
+                expectation += p * sign * state.baselines[c * game.deals + deal];
+            }
+            let sample = traverse(game, state, child, deal, updating);
+            // External sampling draws this action with q(a) = strategy(a),
+            // hence p(a)/q(a) = 1 for every sampled action.
+            value = expectation + (sample - chosen_baseline);
+        } else {
+            value = traverse(game, state, child, deal, updating);
+        }
+    } else {
+        let mut values_storage = [0.0; 16];
+        let values = &mut values_storage[..end - start];
+        for action in 0..(end - start) {
+            let child = game.children[game.child_offsets[index] + action];
+            values[action] = traverse(game, state, child, deal, updating);
+        }
+        let mut expectation = 0.0;
+        for (&p, &v) in strategy.iter().zip(values.iter()) {
+            expectation += p * v;
+        }
+        for (j, &action_value) in values.iter().enumerate() {
+            state.regrets[start + j] += weight * (action_value - expectation);
+        }
+        value = expectation;
     }
-    let mut values = [0.0; MAX_CHOICE];
-    for action in 0..n_actions {
-        let child = game.children[game.child_offsets[index] + action];
-        values[action] = traverse(game, state, child, deal, updating);
-    }
-    let mut value = 0.0;
-    for j in 0..n_actions {
-        value += strategy[j] * values[j];
-    }
-    for j in 0..n_actions {
-        state.regrets[start + j] += values[j] - value;
+    if state.variance_reduced {
+        let slot = index * game.deals + deal;
+        state.baselines[slot] += state.baseline_rate * (sign * value - state.baselines[slot]);
     }
     value
 }
 fn main() {
     let args: Vec<String> = env::args().collect();
-    if args.len() != 3 {
-        eprintln!("usage: leduc-kernel input.bin output.bin");
+    if args.len() != 6 {
+        eprintln!("usage: sampled-variants input.bin output.bin mode baselines.bin baseline_rate");
         std::process::exit(2);
     }
+    let mode = args[3].as_str();
+    assert!(["plain", "linear", "vr", "vr-linear"].contains(&mode));
+    let rate: f64 = args[5].parse().expect("baseline rate");
+    assert!(rate.is_finite() && (0.0..=1.0).contains(&rate));
     let mut r = Reader::new(fs::read(&args[1]).expect("read input"));
     assert_eq!(r.bytes(8).as_slice(), MAGIC_IN);
     let iterations = r.u64() as usize;
@@ -240,6 +241,10 @@ fn main() {
         regrets: Vec::new(),
         sums: Vec::new(),
         visited: Vec::new(),
+        weighted: mode == "linear" || mode == "vr-linear",
+        variance_reduced: mode == "vr" || mode == "vr-linear",
+        baseline_rate: rate,
+        baselines: Vec::new(),
     };
     for x in state.mt.iter_mut() {
         *x = r.u32();
@@ -278,16 +283,33 @@ fn main() {
         chance,
         deals,
     };
-    let chance_sampler = ChanceSampler::new(&game.chance);
+    if state.variance_reduced {
+        if std::path::Path::new(&args[4]).exists() {
+            let mut b = Reader::new(fs::read(&args[4]).expect("read baselines"));
+            assert_eq!(b.bytes(8).as_slice(), b"LDBASE01");
+            state.baselines = b.vec_f64(n_nodes * deals);
+            assert_eq!(b.pos, b.data.len());
+        } else {
+            state.baselines = vec![0.0; n_nodes * deals];
+        }
+    }
     let start = Instant::now();
     for _ in 0..iterations {
         for updating in 0..2 {
-            let deal = state.choose_chance(&chance_sampler);
+            let deal = state.choose(&game.chance);
             let _ = traverse(&game, &mut state, 0, deal, updating);
         }
         state.iterations += 1;
     }
     let elapsed = start.elapsed().as_secs_f64();
+    if state.variance_reduced {
+        let mut b = Vec::new();
+        b.extend_from_slice(b"LDBASE01");
+        for &value in &state.baselines {
+            put_f64(&mut b, value);
+        }
+        fs::write(&args[4], b).expect("write baselines");
+    }
     let mut out = Vec::new();
     out.extend_from_slice(MAGIC_OUT);
     put_u64(&mut out, state.iterations);
@@ -305,4 +327,71 @@ fn main() {
     }
     out.extend_from_slice(&state.visited);
     fs::write(&args[2], out).expect("write output");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fixture() -> (Game, State) {
+        // P1 chooses an action; P0 receives 1 or 3. Expected P0 value is 2.5.
+        let game = Game {
+            players: vec![1, -1, -1],
+            child_offsets: vec![0, 2, 2, 2],
+            children: vec![1, 2],
+            info_ids: vec![0, 0, 0],
+            payoffs: vec![0.0, 1.0, 3.0],
+            action_offsets: vec![0, 2],
+            chance: vec![1.0],
+            deals: 1,
+        };
+        let mut mt = [0u32; 624];
+        mt[0] = 5489;
+        for i in 1..624 {
+            mt[i] = 1812433253u32
+                .wrapping_mul(mt[i - 1] ^ (mt[i - 1] >> 30))
+                .wrapping_add(i as u32);
+        }
+        let state = State {
+            regrets: vec![1.0, 3.0],
+            sums: vec![0.0, 0.0],
+            visited: vec![0],
+            mt,
+            mt_index: 624,
+            iterations: 0,
+            node_visits: 0,
+            weighted: false,
+            variance_reduced: true,
+            baseline_rate: 0.0,
+            baselines: vec![0.0, 0.3, 4.0],
+        };
+        (game, state)
+    }
+
+    #[test]
+    fn arbitrary_baseline_correction_has_exact_expected_value() {
+        let (game, mut state) = fixture();
+        let mut outcomes = Vec::new();
+        for _ in 0..100 {
+            let value = traverse(&game, &mut state, 0, 0, 0);
+            if !outcomes.contains(&value) {
+                outcomes.push(value);
+            }
+        }
+        outcomes.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        assert_eq!(outcomes.len(), 2);
+        // Sample action1 (p=.75) gives 2.075; action0 (p=.25) gives 3.775.
+        let mean = 0.75 * outcomes[0] + 0.25 * outcomes[1];
+        assert!((mean - 2.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn perfect_baseline_removes_opponent_action_sampling_variance() {
+        let (game, mut state) = fixture();
+        state.baselines = vec![0.0, 1.0, 3.0];
+        state.baseline_rate = 0.5;
+        for _ in 0..100 {
+            assert_eq!(traverse(&game, &mut state, 0, 0, 0), 2.5);
+        }
+    }
 }
