@@ -70,8 +70,8 @@ Frontend:
 
 ```bash
 cd frontend
-npm install
-npm run dev
+pnpm install --frozen-lockfile
+pnpm run dev
 ```
 
 Local development falls back to `ws://localhost:3002`.
@@ -84,7 +84,7 @@ Local checks:
 ```bash
 python3 -m pip install -r game_engine/requirements.txt
 PYTHONPATH=. python3 -m unittest discover -s tests -p "test_*.py"
-cd frontend && npm ci && npm run lint && npm run test && npm run build
+cd frontend && pnpm install --frozen-lockfile && pnpm run lint && pnpm run test && pnpm run build
 ```
 
 CI (`.github/workflows/ci.yml`) validates:
@@ -180,3 +180,7 @@ Fetch them after publishing a release:
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Dependency installation
+
+This project uses pnpm 10.34.7 with a frozen `pnpm-lock.yaml`. Run frontend commands from `frontend/`. Restore the shared package policy with My Scripts (`scripts/setup-pnpm-storage.sh --apply`), then run `pnpm install --frozen-lockfile`. Project dependency versions remain independent; identical files share the user package store. Use `pnpm run <script>` for local scripts.

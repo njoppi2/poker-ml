@@ -5,8 +5,8 @@ Vite + React frontend for the poker game UI.
 ## Run Locally
 
 ```bash
-npm install
-npm run dev
+pnpm install --frozen-lockfile
+pnpm run dev
 ```
 
 Open `http://localhost:3000`.
@@ -16,14 +16,14 @@ Local development automatically targets `ws://localhost:3002`. Set `VITE_WS_URL`
 ## Quality Checks
 
 ```bash
-npm run lint
-npm run test
+pnpm run lint
+pnpm run test
 ```
 
 ## Build
 
 ```bash
-npm run build
+pnpm run build
 ```
 
 The production bundle is generated in `dist/`.
